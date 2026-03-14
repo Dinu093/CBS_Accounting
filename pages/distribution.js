@@ -47,7 +47,6 @@ export default function Distribution() {
   const [showGiftedModal, setShowGiftedModal] = useState(false)
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [showLocationModal, setShowLocationModal] = useState(false)
-  const [editingLoc, setEditingLoc] = useState(null)
   const [selectedDist, setSelectedDist] = useState(null)
 
   // Forms

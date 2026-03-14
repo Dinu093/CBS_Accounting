@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import Layout from '../components/Layout'
 import { usd, fdate } from '../lib/constants'
 import DateFilter, { filterByDate } from '../components/DateFilter'
@@ -17,6 +18,7 @@ export default function Sales() {
   const [dateRange, setDateRange] = useState({ from: null, to: null })
   const [activeTab, setActiveTab] = useState('dashboard')
   const [saving, setSaving] = useState(false)
+  const router = useRouter()
   const [targets, setTargets] = useState([])
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [targetForm, setTargetForm] = useState({ distributor_id: '', period: new Date().toISOString().slice(0, 7), target_amount: '' })
@@ -115,7 +117,8 @@ export default function Sales() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => { setLocForm(EMPTY_LOC); setEditingLoc(null); setShowLocModal(true) }}>+ Location</button>
-          <button className="primary" onClick={() => { setDistForm(EMPTY_DIST); setEditingDist(null); setShowDistModal(true) }}>+ Distributor</button>
+          <button onClick={() => { setDistForm(EMPTY_DIST); setEditingDist(null); setShowDistModal(true) }}>+ Distributor</button>
+          <button className="primary" onClick={() => router.push('/income')}>⬆ Record a sale →</button>
         </div>
       </div>
 
@@ -215,6 +218,10 @@ export default function Sales() {
 
           {activeTab === 'ecommerce' && (
             <div>
+              <div className="alert alert-info" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>To record a new sale and update stock automatically, use the Income module.</span>
+                <button className="primary" onClick={() => router.push('/income')} style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap', marginLeft: 12 }}>Go to Income →</button>
+              </div>
               <div className="metrics-grid" style={{ marginBottom: '1.5rem' }}>
                 {[
                   ['Revenue', usd(totalEcom), '#6A1B9A'],

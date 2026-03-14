@@ -1,166 +1,267 @@
-import { useState, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import Layout from '../components/Layout'
 import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd, fdate } from '../lib/constants'
+import * as XLSX from 'xlsx'
 
 export async function getServerSideProps() {
   return { props: {} }
 }
 
-export default function Transactions() {
-  const [txs, setTxs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
-  const [showModal, setShowModal] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    description: '', category: 'Sales — products', amount: '', note: ''
-  })
+function getFileType(file) {
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.csv')) return 'csv'
+  if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.xlsm')) return 'excel'
+  if (file.type.startsWith('image/')) return 'image'
+  if (file.type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf'
+  return 'unknown'
+}
 
-  const load = () => {
+async function readSpreadsheet(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result)
+        const wb = XLSX.read(data, { type: 'array', cellDates: true })
+        let text = ''
+        wb.SheetNames.forEach(name => {
+          const ws = wb.Sheets[name]
+          const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
+          if (csv.trim()) text += 'Sheet: ' + name + '\n' + csv + '\n\n'
+        })
+        resolve(text.trim())
+      } catch (err) { reject(err) }
+    }
+    reader.onerror = reject
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+async function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader()
+    r.onload = () => res(r.result.split(',')[1])
+    r.onerror = rej
+    r.readAsDataURL(file)
+  })
+}
+
+export default function Upload() {
+  const [dragging, setDragging] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
+  const [pending, setPending] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [result, setResult] = useState(null) // { saved, duplicates, details }
+  const inputRef = useRef()
+
+  const analyze = async (file) => {
+    const ftype = getFileType(file)
+    if (ftype === 'unknown') { alert('Format non supporté. Utilise JPG, PNG, PDF, CSV ou XLSX.'); return }
     setLoading(true)
-    fetch('/api/transactions')
-      .then(r => r.json())
-      .then(data => { setTxs(Array.isArray(data) ? data : []); setLoading(false) })
+    setResult(null)
+
+    try {
+      let body
+      if (ftype === 'csv' || ftype === 'excel') {
+        setLoadingMsg('Lecture du fichier…')
+        const content = await readSpreadsheet(file)
+        setLoadingMsg('Analyse par Claude…')
+        body = { type: 'spreadsheet', content, filename: file.name }
+      } else {
+        setLoadingMsg('Analyse du document…')
+        const content = await toBase64(file)
+        body = { type: ftype, content, mediaType: file.type, filename: file.name }
+      }
+
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await resp.json()
+      if (data.error) throw new Error(data.error)
+      const withIds = data.transactions.map((t, i) => ({ ...t, _pid: Date.now() + i }))
+      setPending(prev => [...prev, ...withIds])
+    } catch (err) {
+      alert('Erreur lors de l\'analyse : ' + err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { load() }, [])
-
-  const filtered = filter === 'all' ? txs : txs.filter(t => CATEGORIES[t.category] === filter)
-
-  const save = async () => {
-    if (!form.description || !form.amount) return
+  const acceptAll = async () => {
     setSaving(true)
-    await fetch('/api/transactions', {
+    const resp = await fetch('/api/transactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transactions: [form] })
+      body: JSON.stringify({ transactions: pending.map(({ _pid, ...t }) => t) })
     })
+    const data = await resp.json()
     setSaving(false)
-    setShowModal(false)
-    setForm({ date: new Date().toISOString().split('T')[0], description: '', category: 'Sales — products', amount: '', note: '' })
-    load()
+
+    setResult({
+      saved: data.inserted ? data.inserted.length : 0,
+      duplicates: data.duplicates || [],
+      message: data.message || ''
+    })
+    setPending([])
   }
 
-  const del = async (id) => {
-    if (!confirm('Supprimer cette transaction ?')) return
-    await fetch('/api/transactions?id=' + id, { method: 'DELETE' })
-    load()
+  const acceptOne = async (tx) => {
+    const { _pid, ...t } = tx
+    const resp = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions: [t] })
+    })
+    const data = await resp.json()
+
+    if (data.duplicates && data.duplicates.length > 0) {
+      const dup = data.duplicates[0]
+      setResult({
+        saved: 0,
+        duplicates: [dup],
+        message: 'Doublon détecté — transaction ignorée'
+      })
+    } else {
+      setResult({
+        saved: 1,
+        duplicates: [],
+        message: '1 transaction enregistrée.'
+      })
+    }
+    setPending(prev => prev.filter(p => p._pid !== _pid))
   }
 
-  const netTotal = filtered.reduce((acc, t) => {
-    const type = CATEGORIES[t.category]
-    const isIncome = type === 'revenue' || type === 'capital'
-    return acc + (isIncome ? parseFloat(t.amount) : -parseFloat(t.amount))
-  }, 0)
+  const rejectOne = (_pid) => setPending(prev => prev.filter(p => p._pid !== _pid))
+  const updatePending = (_pid, field, value) => {
+    setPending(prev => prev.map(p => p._pid === _pid ? { ...p, [field]: value } : p))
+  }
 
   return (
     <Layout>
       <div className="page-header">
         <div>
-          <h1>Transactions</h1>
-          <p>{filtered.length} transaction{filtered.length !== 1 ? 's' : ''} · Net {usd(netTotal)}</p>
+          <h1>Upload document</h1>
+          <p>Factures, relevés bancaires, reçus — Claude extrait les transactions automatiquement</p>
         </div>
-        <button className="primary" onClick={() => setShowModal(true)}>+ Ajouter</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1rem', flexWrap: 'wrap' }}>
-        {['all', 'capital', 'revenue', 'cogs', 'opex'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{
-            fontSize: 12,
-            background: filter === f ? 'var(--pink)' : 'var(--white)',
-            color: filter === f ? 'white' : 'var(--text-muted)',
-            borderColor: filter === f ? 'var(--pink)' : 'var(--border)',
-          }}>
-            {f === 'all' ? 'Tout' : TYPE_COLORS[f] ? TYPE_COLORS[f].label : f}
-          </button>
-        ))}
-      </div>
+      {/* Result banner */}
+      {result && (
+        <div style={{ marginBottom: '1rem' }}>
+          {result.saved > 0 && (
+            <div className="alert alert-success">
+              ✓ {result.saved} transaction{result.saved > 1 ? 's' : ''} enregistrée{result.saved > 1 ? 's' : ''} avec succès
+            </div>
+          )}
+          {result.duplicates.length > 0 && (
+            <div className="alert alert-warning">
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                ⚠ {result.duplicates.length} doublon{result.duplicates.length > 1 ? 's' : ''} détecté{result.duplicates.length > 1 ? 's' : ''} et ignoré{result.duplicates.length > 1 ? 's' : ''}
+              </div>
+              {result.duplicates.map((d, i) => (
+                <div key={i} style={{ fontSize: 12, padding: '6px 0', borderTop: i > 0 ? '1px solid #FFE0B2' : 'none' }}>
+                  <strong>{d.newTx?.description || 'Transaction'}</strong> · {d.newTx?.date} · {usd(d.newTx?.amount)}
+                  <br />
+                  <span style={{ color: '#E65100' }}>{d.reason} — déjà enregistrée le {d.existingTx?.date}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {result.saved === 0 && result.duplicates.length === 0 && (
+            <div className="alert alert-info">ℹ {result.message}</div>
+          )}
+        </div>
+      )}
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx,.xls" style={{ display: 'none' }}
+        onChange={e => e.target.files[0] && analyze(e.target.files[0])} />
+
+      <div
+        className={'drop-zone' + (dragging ? ' drag-over' : '')}
+        style={{ marginBottom: '1.5rem' }}
+        onClick={() => !loading && inputRef.current && inputRef.current.click()}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); e.dataTransfer.files[0] && analyze(e.dataTransfer.files[0]) }}
+      >
         {loading ? (
-          <div className="loading">Chargement…</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <div style={{ fontSize: 32 }}>📭</div>
-            <p>Aucune transaction</p>
-          </div>
+          <>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+            <div style={{ fontWeight: 500, marginBottom: 6 }}>{loadingMsg}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Claude analyse votre document…</div>
+          </>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Catégorie</th>
-                <th style={{ textAlign: 'right' }}>Montant</th>
-                <th>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(tx => {
-                const type = CATEGORIES[tx.category]
-                const isIncome = type === 'revenue' || type === 'capital'
-                const c = TYPE_COLORS[type] || TYPE_COLORS.opex
-                return (
-                  <tr key={tx.id}>
-                    <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fdate(tx.date)}</td>
-                    <td style={{ maxWidth: 280 }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description}</div>
-                    </td>
-                    <td>
-                      <span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span>
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: isIncome ? '#2E7D32' : '#C62828', whiteSpace: 'nowrap' }}>
-                      {isIncome ? '+' : '-'}{usd(tx.amount)}
-                    </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{tx.note || '—'}</td>
-                    <td>
-                      <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del(tx.id)}>Suppr.</button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>⬆️</div>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Déposer un document ici</div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+              {[['JPG/PNG','#E6F1FB','#0C447C'],['PDF','#FAECE7','#712B13'],['CSV','#EAF3DE','#27500A'],['XLSX','#FFF3E0','#E65100']]
+                .map(function(item) { return (
+                  <span key={item[0]} className="pill" style={{ background: item[1], color: item[2], fontSize: 12 }}>{item[0]}</span>
+                )})}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cliquer pour parcourir · Glisser-déposer accepté</div>
+          </>
         )}
       </div>
 
-      {showModal && (
-        <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal">
-            <h2>Nouvelle transaction</h2>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Date</label>
-                <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>Montant (USD)</label>
-                <input type="number" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
-              </div>
+      {pending.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ fontWeight: 600 }}>
+              {pending.length} transaction{pending.length > 1 ? 's' : ''} extraite{pending.length > 1 ? 's' : ''} — à valider
             </div>
-            <div className="form-group">
-              <label>Description</label>
-              <input type="text" placeholder="ex : Invoice #001" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label>Catégorie</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                {CAT_KEYS.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Note (optionnel)</label>
-              <input type="text" placeholder="N° facture, fournisseur…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
-            </div>
-            <div className="form-actions">
-              <button className="primary" onClick={save} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
-              <button onClick={() => setShowModal(false)}>Annuler</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="primary" onClick={acceptAll} disabled={saving}>
+                {saving ? 'Enregistrement…' : 'Tout accepter (' + pending.length + ')'}
+              </button>
+              <button onClick={() => setPending([])}>Tout rejeter</button>
             </div>
           </div>
+
+          {pending.map(tx => {
+            const type = CATEGORIES[tx.category]
+            const c = TYPE_COLORS[type] || TYPE_COLORS.opex
+            return (
+              <div key={tx._pid} className="card" style={{ marginBottom: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 200px 120px', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                  <input type="date" value={tx.date} onChange={e => updatePending(tx._pid, 'date', e.target.value)} />
+                  <input type="text" value={tx.description} onChange={e => updatePending(tx._pid, 'description', e.target.value)} />
+                  <select value={tx.category} onChange={e => updatePending(tx._pid, 'category', e.target.value)}>
+                    {CAT_KEYS.map(k => <option key={k}>{k}</option>)}
+                  </select>
+                  <input type="number" value={tx.amount} onChange={e => updatePending(tx._pid, 'amount', e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span>
+                  {tx.note && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tx.note}</span>}
+                  <div style={{ flex: 1 }} />
+                  <span style={{ fontWeight: 600, fontSize: 14, color: (type === 'revenue' || type === 'capital') ? '#2E7D32' : '#C62828' }}>
+                    {usd(tx.amount)}
+                  </span>
+                  <button style={{ background: '#EAF3DE', color: '#27500A', border: 'none', fontSize: 12, padding: '5px 14px', borderRadius: 6, cursor: 'pointer' }} onClick={() => acceptOne(tx)}>
+                    ✓ Accepter
+                  </button>
+                  <button style={{ background: 'var(--gray-light)', border: 'none', fontSize: 12, padding: '5px 14px', borderRadius: 6, cursor: 'pointer' }} onClick={() => rejectOne(tx._pid)}>
+                    Rejeter
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
+
+      <div className="card" style={{ marginTop: '1.5rem' }}>
+        <div className="section-title" style={{ marginBottom: '0.75rem' }}>Conseils par format</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: 13 }}>
+          <div><strong style={{ color: '#0C447C' }}>CSV / XLSX</strong> — idéal pour les relevés bancaires exportés depuis ta banque. Traite mois par mois.</div>
+          <div><strong style={{ color: '#712B13' }}>PDF / Image</strong> — factures fournisseurs, reçus, invoices. Scanne en bonne résolution.</div>
+        </div>
+      </div>
     </Layout>
   )
 }

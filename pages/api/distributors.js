@@ -28,6 +28,14 @@ export default async function handler(req, res) {
     return res.json(data)
   }
 
+  if (req.method === 'PUT') {
+    const { type, id, ...updates } = req.body
+    const table = type === 'price' ? 'distributor_prices' : 'distributors'
+    const { data, error } = await supabase.from(table).update(updates).eq('id', id).select()
+    if (error) return res.status(500).json({ error: error.message })
+    return res.json(data[0])
+  }
+
   if (req.method === 'POST') {
     const { type, ...body } = req.body
 

@@ -1,167 +1,89 @@
-import { useState, useEffect } from 'react'
-import Layout from '../components/Layout'
-import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd, fdate } from '../lib/constants'
+import { createClient } from '@supabase/supabase-js'
 
-export default function Transactions() {
-  const [txs, setTxs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
-  const [showModal, setShowModal] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    description: '', category: 'Sales — products', amount: '', note: ''
-  })
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
-  const load = () => {
-    setLoading(true)
-    fetch('/api/transactions')
-      .then(r => r.json())
-      .then(data => { setTxs(Array.isArray(data) ? data : []); setLoading(false) })
+export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .order('date', { ascending: false })
+    if (error) return res.status(500).json({ error: error.message })
+    return res.json(data)
   }
 
-  useEffect(() => { load() }, [])
+  if (req.method === 'POST') {
+    const { transactions } = req.body
 
-  const filtered = filter === 'all' ? txs : txs.filter(t => CATEGORIES[t.category] === filter)
+    const results = []
+    const duplicates = []
 
-  const save = async () => {
-    if (!form.description || !form.amount) return
-    setSaving(true)
-    await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transactions: [form] })
+    for (const t of transactions) {
+      const amount = parseFloat(t.amount) || 0
+
+      // Check for duplicate: same date + amount + category
+      const { data: existing } = await supabase
+        .from('transactions')
+        .select('id, date, amount, description, note')
+        .eq('date', t.date)
+        .eq('amount', amount)
+        .eq('category', t.category)
+
+      if (existing && existing.length > 0) {
+        // Also check note/reference similarity if available
+        const sameRef = t.note && existing.some(e =>
+          e.note && e.note.toLowerCase().trim() === t.note.toLowerCase().trim()
+        )
+        const sameDesc = existing.some(e =>
+          e.description.toLowerCase().trim() === (t.description || '').toLowerCase().trim()
+        )
+
+        if (sameRef || sameDesc) {
+          duplicates.push({
+            new: t,
+            existing: existing[0],
+            reason: sameRef ? 'Même référence, date et montant' : 'Même description, date et montant'
+          })
+          continue // skip inserting this one
+        }
+      }
+
+      const row = {
+        date: t.date,
+        description: t.description,
+        category: t.category,
+        type: t.type || t.category,
+        amount,
+        note: t.note || null,
+      }
+      results.push(row)
+    }
+
+    let inserted = []
+    if (results.length > 0) {
+      const { data, error } = await supabase.from('transactions').insert(results).select()
+      if (error) return res.status(500).json({ error: error.message })
+      inserted = data
+    }
+
+    return res.json({
+      inserted,
+      duplicates,
+      message: duplicates.length > 0
+        ? `${inserted.length} transaction(s) enregistrée(s). ${duplicates.length} doublon(s) détecté(s) et ignoré(s).`
+        : `${inserted.length} transaction(s) enregistrée(s).`
     })
-    setSaving(false)
-    setShowModal(false)
-    setForm({ date: new Date().toISOString().split('T')[0], description: '', category: 'Sales — products', amount: '', note: '' })
-    load()
   }
 
-  const del = async (id) => {
-    if (!confirm('Supprimer cette transaction ?')) return
-    await fetch(`/api/transactions?id=${id}`, { method: 'DELETE' })
-    load()
+  if (req.method === 'DELETE') {
+    const { id } = req.query
+    const { error } = await supabase.from('transactions').delete().eq('id', id)
+    if (error) return res.status(500).json({ error: error.message })
+    return res.json({ success: true })
   }
 
-  const totals = filtered.reduce((acc, t) => {
-    const type = CATEGORIES[t.category]
-    const isIncome = type === 'revenue' || type === 'capital'
-    acc.total += isIncome ? parseFloat(t.amount) : -parseFloat(t.amount)
-    return acc
-  }, { total: 0 })
-
-  return (
-    <Layout>
-      <div className="page-header">
-        <div>
-          <h1>Transactions</h1>
-          <p>{filtered.length} transaction{filtered.length !== 1 ? 's' : ''} · Net {usd(totals.total)}</p>
-        </div>
-        <button className="primary" onClick={() => setShowModal(true)}>+ Ajouter</button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1rem', flexWrap: 'wrap' }}>
-        {['all', 'capital', 'revenue', 'cogs', 'opex'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{
-            fontSize: 12,
-            background: filter === f ? 'var(--pink)' : 'var(--white)',
-            color: filter === f ? 'white' : 'var(--text-muted)',
-            borderColor: filter === f ? 'var(--pink)' : 'var(--border)',
-          }}>
-            {f === 'all' ? 'Tout' : TYPE_COLORS[f]?.label || f}
-          </button>
-        ))}
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {loading ? (
-          <div className="loading">Chargement…</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <div style={{ fontSize: 32 }}>📭</div>
-            <p>Aucune transaction</p>
-          </div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Catégorie</th>
-                <th style={{ textAlign: 'right' }}>Montant</th>
-                <th>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(tx => {
-                const type = CATEGORIES[tx.category]
-                const isIncome = type === 'revenue' || type === 'capital'
-                const c = TYPE_COLORS[type] || TYPE_COLORS.opex
-                return (
-                  <tr key={tx.id}>
-                    <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fdate(tx.date)}</td>
-                    <td style={{ maxWidth: 280 }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description}</div>
-                    </td>
-                    <td>
-                      <span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span>
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: isIncome ? '#2E7D32' : '#C62828', whiteSpace: 'nowrap' }}>
-                      {isIncome ? '+' : '−'}{usd(tx.amount)}
-                    </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{tx.note || '—'}</td>
-                    <td>
-                      <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del(tx.id)}>
-                        Suppr.
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {showModal && (
-        <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal">
-            <h2>Nouvelle transaction</h2>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Date</label>
-                <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>Montant (USD)</label>
-                <input type="number" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Description</label>
-              <input type="text" placeholder="ex : Invoice #001 — batch produits" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label>Catégorie</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                {CAT_KEYS.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Note / N° pièce (optionnel)</label>
-              <input type="text" placeholder="Invoice #001, nom du fournisseur…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
-            </div>
-            <div className="form-actions">
-              <button className="primary" onClick={save} disabled={saving}>
-                {saving ? 'Enregistrement…' : 'Enregistrer'}
-              </button>
-              <button onClick={() => setShowModal(false)}>Annuler</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Layout>
-  )
+  res.status(405).end()
 }

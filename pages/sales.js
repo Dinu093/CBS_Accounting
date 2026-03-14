@@ -17,6 +17,9 @@ export default function Sales() {
   const [dateRange, setDateRange] = useState({ from: null, to: null })
   const [activeTab, setActiveTab] = useState('dashboard')
   const [saving, setSaving] = useState(false)
+  const [targets, setTargets] = useState([])
+  const [showTargetModal, setShowTargetModal] = useState(false)
+  const [targetForm, setTargetForm] = useState({ distributor_id: '', period: new Date().toISOString().slice(0, 7), target_amount: '' })
 
   const [showDistModal, setShowDistModal] = useState(false)
   const [showLocModal, setShowLocModal] = useState(false)
@@ -32,12 +35,14 @@ export default function Sales() {
       fetch('/api/locations?t=' + Date.now()).then(r => r.json()),
       fetch('/api/sales?t=' + Date.now()).then(r => r.json()),
       fetch('/api/inventory?t=' + Date.now()).then(r => r.json()),
-    ]).then(([d, l, o, p]) => {
+      fetch('/api/gifted?targets=1&t=' + Date.now()).then(r => r.json()),
+    ]).then(([d, l, o, p, tg]) => {
       setDistributors(Array.isArray(d) ? d : [])
       setLocations(Array.isArray(l) ? l : [])
       setOrders(Array.isArray(o) ? o.filter(x => x.channel !== 'E-commerce') : [])
       setAllSales(Array.isArray(o) ? o : [])
       setProducts(Array.isArray(p) ? p : [])
+      setTargets(Array.isArray(tg) ? tg : [])
       setLoading(false)
     })
   }
@@ -77,6 +82,13 @@ export default function Sales() {
       await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(locForm) })
     }
     setSaving(false); setShowLocModal(false); setEditingLoc(null); setLocForm(EMPTY_LOC); load()
+  }
+
+  const saveTarget = async () => {
+    if (!targetForm.distributor_id || !targetForm.target_amount) return
+    setSaving(true)
+    await fetch('/api/gifted', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(targetForm) })
+    setSaving(false); setShowTargetModal(false); load()
   }
 
   const delDist = async (id) => { if (!confirm('Delete distributor and all its locations?')) return; await fetch('/api/distributors?id=' + id + '&type=distributor', { method: 'DELETE' }); load() }
@@ -168,6 +180,36 @@ export default function Sales() {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>Based on location addresses — add locations to fill the map</div>
                 </div>
               </div>
+              {/* Targets recap */}
+              {targets.length > 0 && (() => {
+                const currentMonth = new Date().toISOString().slice(0, 7)
+                const monthTargets = targets.filter(t => t.period === currentMonth)
+                if (monthTargets.length === 0) return null
+                return (
+                  <div className="card" style={{ marginTop: '1.25rem' }}>
+                    <div className="section-title" style={{ marginBottom: '1rem' }}>Monthly targets — {currentMonth}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                      {monthTargets.map(t => {
+                        const dist = distributors.find(d => d.id === t.distributor_id)
+                        const achieved = fOrders.filter(o => o.distributor_id === t.distributor_id && o.date?.slice(0, 7) === t.period).reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
+                        const pct = parseFloat(t.target_amount) > 0 ? Math.min(100, achieved / parseFloat(t.target_amount) * 100) : 0
+                        const met = achieved >= parseFloat(t.target_amount)
+                        return (
+                          <div key={t.id} style={{ padding: '12px', background: met ? 'var(--green-light)' : 'var(--cream)', borderRadius: 'var(--radius-sm)', border: '1px solid ' + (met ? 'rgba(42,107,74,0.2)' : 'var(--border)') }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{dist?.name || '—'}</div>
+                            <div style={{ fontSize: 20, fontWeight: 300, color: met ? 'var(--green)' : 'var(--amber)', marginBottom: 4 }}>{pct.toFixed(0)}%</div>
+                            <div style={{ height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 2, marginBottom: 4 }}>
+                              <div style={{ height: '100%', width: pct + '%', background: met ? 'var(--green)' : 'var(--amber)', borderRadius: 2 }} />
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{usd(achieved)} / {usd(t.target_amount)}</div>
+                            {met && <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 500, marginTop: 2 }}>✓ Target met!</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
@@ -252,7 +294,35 @@ export default function Sales() {
                         </div>
                       ))
                     }
-                    <button onClick={() => { setLocForm({ ...EMPTY_LOC, distributor_id: d.id }); setEditingLoc(null); setShowLocModal(true) }} style={{ width: '100%', fontSize: 11, padding: '6px', marginTop: 4, background: 'var(--blue-light)', color: 'var(--navy-mid)', borderColor: 'rgba(44,74,110,0.1)' }}>+ Add location</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
+                      <button onClick={() => { setLocForm({ ...EMPTY_LOC, distributor_id: d.id }); setEditingLoc(null); setShowLocModal(true) }} style={{ fontSize: 11, padding: '6px', background: 'var(--blue-light)', color: 'var(--navy-mid)', borderColor: 'rgba(44,74,110,0.1)' }}>+ Location</button>
+                      <button onClick={() => { setTargetForm(f => ({ ...f, distributor_id: d.id })); setShowTargetModal(true) }} style={{ fontSize: 11, padding: '6px' }}>🎯 Set target</button>
+                    </div>
+
+                    {/* Targets for this distributor */}
+                    {targets.filter(t => t.distributor_id === d.id).length > 0 && (
+                      <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>Targets</div>
+                        {targets.filter(t => t.distributor_id === d.id).sort((a, b) => b.period?.localeCompare(a.period)).slice(0, 3).map(t => {
+                          const monthOrders = fOrders.filter(o => o.distributor_id === d.id && o.date?.slice(0, 7) === t.period)
+                          const achieved = monthOrders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
+                          const pct = parseFloat(t.target_amount) > 0 ? Math.min(100, achieved / parseFloat(t.target_amount) * 100) : 0
+                          const met = achieved >= parseFloat(t.target_amount)
+                          return (
+                            <div key={t.id} style={{ marginBottom: 6 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                                <span style={{ color: 'var(--text-muted)' }}>{t.period}</span>
+                                <span style={{ color: met ? 'var(--green)' : 'var(--amber)', fontWeight: 500 }}>{usd(achieved)} / {usd(t.target_amount)}</span>
+                              </div>
+                              <div style={{ height: 4, background: 'var(--cream-dark)', borderRadius: 2 }}>
+                                <div style={{ height: '100%', width: pct + '%', background: met ? 'var(--green)' : 'var(--amber)', borderRadius: 2, transition: 'width 0.4s' }} />
+                              </div>
+                              <div style={{ fontSize: 10, color: met ? 'var(--green)' : 'var(--text-muted)', marginTop: 2 }}>{met ? '✓ Target met' : pct.toFixed(0) + '% of target'}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -346,6 +416,29 @@ export default function Sales() {
           </div>
         </div>
       )}
+      {/* Target modal */}
+      {showTargetModal && (
+        <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowTargetModal(false)}>
+          <div className="modal">
+            <h2>Set sales target</h2>
+            <div className="form-group"><label>Distributor *</label>
+              <select value={targetForm.distributor_id} onChange={e => setTargetForm({ ...targetForm, distributor_id: e.target.value })}>
+                <option value="">— Select —</option>
+                {distributors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+            <div className="form-row">
+              <div className="form-group"><label>Month</label><input type="month" value={targetForm.period} onChange={e => setTargetForm({ ...targetForm, period: e.target.value })} /></div>
+              <div className="form-group"><label>Target ($)</label><input type="number" placeholder="0.00" value={targetForm.target_amount} onChange={e => setTargetForm({ ...targetForm, target_amount: e.target.value })} /></div>
+            </div>
+            <div className="form-actions">
+              <button className="primary" onClick={saveTarget} disabled={saving}>{saving ? 'Saving…' : 'Save target'}</button>
+              <button onClick={() => setShowTargetModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </Layout>
   )
 }

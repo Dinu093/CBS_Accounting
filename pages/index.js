@@ -154,3 +154,6 @@ export default function Dashboard() {
     </Layout>
   )
 }
+
+
+export async function getServerSideProps() { return { props: {} } }

@@ -6,8 +6,6 @@ const supabase = createClient(
 )
 
 export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
-  res.setHeader('Pragma', 'no-cache')
   if (req.method === 'GET') {
     const { data, error } = await supabase
       .from('inventory')

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Layout from '../components/Layout'
 import { usd, fdate } from '../lib/constants'
 import * as XLSX from 'xlsx'
+import DateFilter, { filterByDate } from '../components/DateFilter'
 
 export async function getServerSideProps() { return { props: {} } }
 
@@ -29,6 +30,7 @@ export default function Income() {
   const [showModal, setShowModal] = useState(false)
   const [dupConfirm, setDupConfirm] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
+  const [dateRange, setDateRange] = useState({ from: null, to: null })
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], channel: 'E-commerce', distributor_id: '', reference: '', note: '' })
   const [items, setItems] = useState([{ product_id: '', quantity: '', unit_price: '' }])
   const inputRef = useRef()
@@ -116,7 +118,8 @@ export default function Income() {
     load()
   }
 
-  const totalEncaisse = orders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
+  const filteredOrders = filterByDate(orders, 'date', dateRange)
+  const totalEncaisse = filteredOrders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
 
   return (
     <Layout>
@@ -133,10 +136,11 @@ export default function Income() {
 
       {successMsg && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{successMsg}</div>}
 
+      <DateFilter onChange={setDateRange} />
       <div className="metrics-grid" style={{ marginBottom: '1.5rem' }}>
         {[
           ['CA Total', usd(totalEncaisse), '#2E7D32'],
-          ['Nb commandes', orders.length, '#1565C0'],
+          ['Nb commandes', filteredOrders.length, '#1565C0'],
           ['E-commerce', usd(orders.filter(o => o.channel === 'E-commerce').reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)), '#6A1B9A'],
           ['Wholesale', usd(orders.filter(o => o.channel !== 'E-commerce').reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)), '#E65100'],
         ].map(([l, v, c]) => (
@@ -145,7 +149,7 @@ export default function Income() {
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {loading ? <div className="loading">Chargement…</div> : orders.length === 0 ? (
+        {loading ? <div className="loading">Chargement…</div> : filteredOrders.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36 }}>💚</div>
             <p>Aucun encaissement enregistré</p>
@@ -155,7 +159,7 @@ export default function Income() {
           <table>
             <thead><tr><th>Date</th><th>Référence</th><th>Canal</th><th>Distributeur</th><th>Produits</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
             <tbody>
-              {orders.map(o => (
+              {filteredOrders.map(o => (
                 <tr key={o.id}>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fdate(o.date)}</td>
                   <td style={{ fontWeight: 500 }}>{o.reference || o.id.slice(0, 8)}</td>

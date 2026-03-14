@@ -6,20 +6,20 @@ const NAV = [
   { group: null, items: [
     { href: '/', icon: '▣', label: 'Dashboard' },
   ]},
+  { group: 'Operations', items: [
+    { href: '/products',  icon: '◻', label: 'Products' },
+    { href: '/stock',     icon: '◈', label: 'Stock' },
+    { href: '/wholesale', icon: '◎', label: 'Wholesale' },
+  ]},
   { group: 'Finance', items: [
     { href: '/income',   icon: '↑', label: 'Income' },
     { href: '/expenses', icon: '↓', label: 'Expenses' },
     { href: '/cashflow', icon: '⇄', label: 'Cash Flow AP/AR' },
-    { href: '/import', icon: '⬆', label: 'Bank Import' },
-  ]},
-  { group: 'Operations', items: [
-    { href: '/inventory',    icon: '◫', label: 'Inventory' },
-    { href: '/costs',        icon: '◈', label: 'Shipments & Imports' },
-    { href: '/distribution', icon: '◎', label: 'Distribution' },
+    { href: '/import',   icon: '⬆', label: 'Bank Import' },
   ]},
   { group: 'Analytics', items: [
     { href: '/reports', icon: '▸', label: 'Reports' },
-    { href: '/map', icon: '◉', label: 'Customer Map' },
+    { href: '/map',     icon: '◉', label: 'Customer Map' },
   ]},
 ]
 
@@ -31,13 +31,8 @@ export default function Layout({ children }) {
         <div className="sidebar-logo">
           <img src={LOGO} alt="Clique Beauty" style={{ width: '100%', maxWidth: 180, height: 'auto', opacity: 0.95 }} />
           <div style={{
-            fontSize: 12,
-            color: 'rgba(255,255,255,0.55)',
-            marginTop: 12,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            fontWeight: 500,
-            fontFamily: 'DM Sans, sans-serif'
+            fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 12,
+            letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 500
           }}>Finance & Operations</div>
         </div>
         {NAV.map((section, si) => (
@@ -52,7 +47,7 @@ export default function Layout({ children }) {
           </div>
         ))}
         <div style={{ marginTop: 'auto', padding: '20px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-          FY 2025 · v3.0
+          FY 2025 · v4.0
         </div>
       </nav>
       <main className="main-content">{children}</main>

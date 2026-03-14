@@ -94,9 +94,8 @@ export default function Stock() {
   // Auto-fill unit cost from product
   const handleProductChange = (i, productId) => {
     const prod = products.find(p => p.id === productId)
-    updateLine(i, 'product_id', productId)
-    if (prod?.prod_cost) updateLine(i, 'unit_cost', prod.prod_cost)
-    else if (prod?.unit_cost) updateLine(i, 'unit_cost', prod.unit_cost)
+    const unitCostVal = prod?.prod_cost || prod?.unit_cost || ''
+    setShipLines(prev => prev.map((l, xi) => xi === i ? { ...l, product_id: productId, unit_cost: unitCostVal } : l))
   }
 
   const saveShipment = async () => {

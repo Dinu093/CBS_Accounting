@@ -231,3 +231,6 @@ export default function Costs() {
     </Layout>
   )
 }
+
+
+export async function getServerSideProps() { return { props: {} } }

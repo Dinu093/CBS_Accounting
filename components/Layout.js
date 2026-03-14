@@ -2,12 +2,11 @@ import { useRouter } from 'next/router'
 
 const NAV = [
   { href: '/',             icon: '📊', label: 'Dashboard' },
-  { href: '/transactions', icon: '📒', label: 'Transactions' },
+  { href: '/income',       icon: '💚', label: 'Encaissements' },
+  { href: '/expenses',     icon: '🔴', label: 'Décaissements' },
   { href: '/inventory',    icon: '📦', label: 'Inventaire' },
   { href: '/costs',        icon: '🧮', label: 'Coûts de revient' },
-  { href: '/sales',        icon: '🛍️', label: 'Ventes' },
   { href: '/distribution', icon: '🌐', label: 'Distribution' },
-  { href: '/upload',       icon: '⬆️', label: 'Upload document' },
   { href: '/reports',      icon: '📈', label: 'Rapports' },
 ]
 
@@ -23,7 +22,7 @@ export default function Layout({ children }) {
         {NAV.map(n => (
           <button
             key={n.href}
-            className={`nav-item${router.pathname === n.href ? ' active' : ''}`}
+            className={'nav-item' + (router.pathname === n.href ? ' active' : '')}
             onClick={() => router.push(n.href)}
           >
             <span style={{ fontSize: 16 }}>{n.icon}</span>
@@ -31,7 +30,7 @@ export default function Layout({ children }) {
           </button>
         ))}
         <div style={{ marginTop: 'auto', padding: '1.25rem', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' }}>
-          FY 2025 · CBS Accounting v2
+          FY 2025 · CBS Accounting v3
         </div>
       </nav>
       <main className="main-content">

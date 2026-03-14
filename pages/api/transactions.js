@@ -16,29 +16,30 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { transactions } = req.body
+    const { transactions, forceInsert } = req.body
     const inserted = []
     const duplicates = []
 
     for (const tx of transactions) {
       const amount = parseFloat(tx.amount) || 0
 
-      // Check duplicate: same date + amount + category (no description check — Claude can rephrase)
-      const { data: found } = await supabase
-        .from('transactions')
-        .select('id, date, amount, description, note, category')
-        .eq('date', tx.date)
-        .eq('amount', amount)
-        .eq('category', tx.category)
+      if (!forceInsert) {
+        // Check duplicate: same date + amount + category
+        const { data: found } = await supabase
+          .from('transactions')
+          .select('id, date, amount, description, category')
+          .eq('date', tx.date)
+          .eq('amount', amount)
+          .eq('category', tx.category)
 
-      if (found && found.length > 0) {
-        // It's a duplicate — block it
-        duplicates.push({
-          newTx: tx,
-          existingTx: found[0],
-          reason: 'Même date, montant et catégorie'
-        })
-        continue
+        if (found && found.length > 0) {
+          duplicates.push({
+            newTx: tx,
+            existingTx: found[0],
+            reason: 'Même date, montant et catégorie'
+          })
+          continue
+        }
       }
 
       inserted.push({
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
         description: tx.description,
         category: tx.category,
         type: tx.type || tx.category,
-        amount,
+        amount: parseFloat(tx.amount) || 0,
         note: tx.note || null,
       })
     }
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
       inserted: savedRows,
       duplicates,
       message: duplicates.length > 0
-        ? savedRows.length + ' transaction(s) enregistrée(s). ' + duplicates.length + ' doublon(s) ignoré(s).'
+        ? savedRows.length + ' transaction(s) enregistrée(s). ' + duplicates.length + ' doublon(s) détecté(s).'
         : savedRows.length + ' transaction(s) enregistrée(s).'
     })
   }

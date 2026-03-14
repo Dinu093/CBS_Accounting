@@ -43,7 +43,7 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
-/* â”€â”€ Sidebar â”€â”€ */
+/* ── Sidebar ── */
 .sidebar {
   width: 236px;
   min-height: 100vh;
@@ -84,7 +84,7 @@ a { color: inherit; text-decoration: none; }
   gap: 12px;
   padding: 11px 22px;
   font-size: 14px;
-  color: rgba(255,255,255,0.52);
+  color: rgba(255,255,255,0.72);
   cursor: pointer;
   border: none;
   background: none;
@@ -98,8 +98,8 @@ a { color: inherit; text-decoration: none; }
 }
 
 .nav-item:hover {
-  color: rgba(255,255,255,0.85);
-  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.06);
 }
 
 .nav-item.active {
@@ -126,14 +126,14 @@ a { color: inherit; text-decoration: none; }
   font-weight: 500;
 }
 
-/* â”€â”€ Main content â”€â”€ */
+/* ── Main content ── */
 .main-content {
   margin-left: 236px;
   padding: 36px 40px;
   min-height: 100vh;
 }
 
-/* â”€â”€ Page header â”€â”€ */
+/* ── Page header ── */
 .page-header {
   margin-bottom: 28px;
   display: flex;
@@ -156,7 +156,7 @@ a { color: inherit; text-decoration: none; }
   margin-top: 4px;
 }
 
-/* â”€â”€ Cards â”€â”€ */
+/* ── Cards ── */
 .card {
   background: var(--white);
   border: 1px solid var(--border);
@@ -193,7 +193,7 @@ a { color: inherit; text-decoration: none; }
   font-family: 'DM Sans', sans-serif;
 }
 
-/* â”€â”€ Buttons â”€â”€ */
+/* ── Buttons ── */
 button {
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
@@ -241,7 +241,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* â”€â”€ Inputs â”€â”€ */
+/* ── Inputs ── */
 input, select, textarea {
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -269,7 +269,7 @@ select {
   padding-right: 32px;
 }
 
-/* â”€â”€ Pills / Badges â”€â”€ */
+/* ── Pills / Badges ── */
 .pill {
   display: inline-block;
   font-size: 11px;
@@ -285,7 +285,7 @@ select {
 .badge-cogs    { background: var(--amber-light); color: var(--amber); }
 .badge-opex    { background: #F3EEF8; color: #5B3D8A; }
 
-/* â”€â”€ Table â”€â”€ */
+/* ── Table ── */
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 th {
@@ -313,7 +313,7 @@ tr:hover td {
   background: rgba(123,163,188,0.04);
 }
 
-/* â”€â”€ Alerts â”€â”€ */
+/* ── Alerts ── */
 .alert {
   padding: 12px 16px;
   border-radius: var(--radius);
@@ -340,7 +340,7 @@ tr:hover td {
   border: 1px solid rgba(44,74,110,0.12);
 }
 
-/* â”€â”€ Modals â”€â”€ */
+/* ── Modals ── */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -375,7 +375,7 @@ tr:hover td {
   letter-spacing: -0.01em;
 }
 
-/* â”€â”€ Forms â”€â”€ */
+/* ── Forms ── */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -403,7 +403,7 @@ tr:hover td {
   border-top: 1px solid var(--border);
 }
 
-/* â”€â”€ Drop zone â”€â”€ */
+/* ── Drop zone ── */
 .drop-zone {
   border: 1.5px dashed var(--border-mid);
   border-radius: var(--radius-lg);
@@ -419,7 +419,7 @@ tr:hover td {
   background: var(--blue-light);
 }
 
-/* â”€â”€ Metrics grid â”€â”€ */
+/* ── Metrics grid ── */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -427,7 +427,7 @@ tr:hover td {
   margin-bottom: 1.75rem;
 }
 
-/* â”€â”€ Section title â”€â”€ */
+/* ── Section title ── */
 .section-title {
   font-size: 10.5px;
   font-weight: 600;
@@ -437,7 +437,7 @@ tr:hover td {
   margin-bottom: 1rem;
 }
 
-/* â”€â”€ Loading / empty states â”€â”€ */
+/* ── Loading / empty states ── */
 .loading {
   display: flex;
   align-items: center;
@@ -456,7 +456,7 @@ tr:hover td {
 
 .empty-state p { margin-top: 10px; font-size: 13px; }
 
-/* â”€â”€ Tabs â”€â”€ */
+/* ── Tabs ── */
 .tab-btn {
   border: none;
   background: none;
@@ -483,7 +483,7 @@ tr:hover td {
   border-color: none;
 }
 
-/* â”€â”€ Date filter bar â”€â”€ */
+/* ── Date filter bar ── */
 .date-filter-bar {
   display: flex;
   align-items: center;
@@ -497,12 +497,12 @@ tr:hover td {
   box-shadow: var(--shadow-sm);
 }
 
-/* â”€â”€ Scrollbar â”€â”€ */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 10px; }
 
-/* â”€â”€ Responsive â”€â”€ */
+/* ── Responsive ── */
 @media (max-width: 900px) {
   .sidebar { display: none; }
   .main-content { margin-left: 0; padding: 1.25rem; }

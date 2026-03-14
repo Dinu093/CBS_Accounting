@@ -55,10 +55,35 @@ export default async function handler(req, res) {
       }
     }
 
+    // Sanitize ALL fields — prevent empty string errors on numeric columns
+    const n = (v) => v !== undefined && v !== null && v !== '' ? parseFloat(v) : null
+    const s = (v) => v && v !== '0' && v.toString().trim() !== '' ? v.toString().trim() : null
+    const cleanOrder = {
+      date: order.date,
+      channel: order.channel || 'E-commerce',
+      reference: s(order.reference),
+      note: s(order.note),
+      distributor_id: s(order.distributor_id),
+      location_id: s(order.location_id),
+      payment_status: order.payment_status || 'paid',
+      due_date: s(order.due_date),
+      buyer_name: s(order.buyer_name),
+      buyer_email: s(order.buyer_email),
+      buyer_phone: s(order.buyer_phone),
+      buyer_address: s(order.buyer_address),
+      buyer_city: s(order.buyer_city),
+      buyer_state: s(order.buyer_state),
+      buyer_zip: s(order.buyer_zip),
+      shipping_cost: n(order.shipping_cost) || 0,
+      shipping_charged: order.shipping_charged || false,
+      lat: n(order.lat),
+      lng: n(order.lng),
+    }
+
     // Insert order
     const { data: ord, error: ordErr } = await supabase
       .from('sales_orders')
-      .insert([{ ...order, total_amount: Math.round(totalAmount * 100) / 100 }])
+      .insert([{ ...cleanOrder, total_amount: Math.round(totalAmount * 100) / 100 }])
       .select()
     if (ordErr) return res.status(500).json({ error: ordErr.message })
 

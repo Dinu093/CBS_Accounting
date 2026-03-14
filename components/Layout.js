@@ -10,6 +10,7 @@ const NAV = [
     { href: '/income',   icon: '↑', label: 'Income' },
     { href: '/expenses', icon: '↓', label: 'Expenses' },
     { href: '/cashflow', icon: '⇄', label: 'Cash Flow AP/AR' },
+    { href: '/import', icon: '⬆', label: 'Bank Import' },
   ]},
   { group: 'Operations', items: [
     { href: '/inventory',    icon: '◫', label: 'Inventory' },

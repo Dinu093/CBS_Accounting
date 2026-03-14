@@ -527,7 +527,7 @@ export default function Reports() {
                   ['Schedule K-1 (×2)', 'One per member', 'March 15, 2026', true],
                   ['Kentucky Form 765', 'State Partnership Return', 'March 15, 2026', true],
                   ['Form 7004', 'Extension (if needed)', 'March 15, 2026', false],
-                  ['1099-NEC', 'Contractors paid >$600', 'January 31, 2026', false],
+                  ['1099-NEC', 'Contractors paid &gt;$600', 'January 31, 2026', false],
                 ].map(([form, desc, due, required]) => (
                   <div key={form} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                     <span style={{ minWidth: 8, height: 8, width: 8, borderRadius: '50%', background: required ? 'var(--red)' : 'var(--amber)', marginTop: 4, flexShrink: 0 }} />
@@ -540,7 +540,7 @@ export default function Reports() {
                 ))}
               </div>
               <div className="card">
-                <div className="section-title" style={{ marginBottom: '0.75rem' }}>1099 Candidates (>$600)</div>
+                <div className="section-title" style={{ marginBottom: '0.75rem' }}>1099 Candidates (&gt;$600)</div>
                 {Object.entries(vendors).filter(([, v]) => v >= 600).length === 0 ?
                   <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No vendors over $600 yet</div> :
                   Object.entries(vendors).filter(([, v]) => v >= 600).sort((a, b) => b[1] - a[1]).map(([name, total]) => (

@@ -3,6 +3,10 @@ import Layout from '../components/Layout'
 import { usd, fdate } from '../lib/constants'
 import * as XLSX from 'xlsx'
 
+export async function getServerSideProps() {
+  return { props: {} }
+}
+
 const CHANNELS = ['E-commerce', 'Wholesale USA', 'Wholesale International', 'Retail']
 
 export default function Sales() {
@@ -15,6 +19,7 @@ export default function Sales() {
   const [saving, setSaving] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeMsg, setAnalyzeMsg] = useState('')
+  const [dupConfirm, setDupConfirm] = useState(null)
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
     channel: 'E-commerce', distributor_id: '', reference: '', note: ''
@@ -48,7 +53,7 @@ export default function Sales() {
     return a + ((parseFloat(i.quantity) || 0) * (parseFloat(prod?.unit_cost) || 0))
   }, 0)
 
-  const save = async () => {
+  const doSave = async (forceInsert = false) => {
     if (!form.date || items.some(i => !i.product_id || !i.quantity || !i.unit_price)) {
       alert('Remplis tous les champs obligatoires (produit, quantité, prix)')
       return
@@ -61,12 +66,21 @@ export default function Sales() {
     const resp = await fetch('/api/sales', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order: form, items: enrichedItems })
+      body: JSON.stringify({ order: form, items: enrichedItems, forceInsert })
     })
     const data = await resp.json()
     setSaving(false)
+
+    if (data.duplicate && !forceInsert) {
+      // Show duplicate confirmation
+      setDupConfirm({ message: data.error, existing: data.existing })
+      return
+    }
+
     if (data.error) { alert('Erreur : ' + data.error); return }
+
     setShowModal(false)
+    setDupConfirm(null)
     setForm({ date: new Date().toISOString().split('T')[0], channel: 'E-commerce', distributor_id: '', reference: '', note: '' })
     setItems([{ product_id: '', quantity: '', unit_price: '' }])
     load()
@@ -74,7 +88,7 @@ export default function Sales() {
 
   const deleteOrder = async (id) => {
     if (!confirm('Annuler cette vente ? Le stock sera restauré.')) return
-    await fetch(`/api/sales?id=${id}`, { method: 'DELETE' })
+    await fetch('/api/sales?id=' + id, { method: 'DELETE' })
     load()
   }
 
@@ -83,7 +97,6 @@ export default function Sales() {
     setAnalyzeMsg('Lecture du fichier…')
     try {
       let content, type
-
       if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         const ab = await file.arrayBuffer()
         const wb = XLSX.read(new Uint8Array(ab), { type: 'array' })
@@ -91,74 +104,40 @@ export default function Sales() {
         type = 'spreadsheet'
       } else {
         content = await new Promise((res, rej) => {
-          const r = new FileReader()
-          r.onload = () => res(r.result.split(',')[1])
-          r.onerror = rej
-          r.readAsDataURL(file)
+          const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file)
         })
         type = file.type.startsWith('image/') ? 'image' : 'pdf'
       }
 
-      const productList = products.map(p => `{"id":"${p.id}","name":"${p.product_name}"}`).join(', ')
-      const distList = distributors.map(d => `{"id":"${d.id}","name":"${d.name}","channel":"${d.channel}"}`).join(', ')
+      const productList = products.map(p => '{"id":"' + p.id + '","name":"' + p.product_name + '"}').join(', ')
+      const distList = distributors.map(d => '{"id":"' + d.id + '","name":"' + d.name + '","channel":"' + d.channel + '"}').join(', ')
 
       setAnalyzeMsg('Analyse par Claude…')
-
-      const systemOverride = `Tu es un assistant comptable pour Clique Beauty Skincare LLC. Analyse cette facture de vente et retourne UNIQUEMENT un objet JSON (sans markdown) avec ces champs :
-- "date": date de la facture (YYYY-MM-DD)
-- "reference": numéro de facture (juste le numéro, ex: "INV-001")
-- "channel": exactement un de : "E-commerce", "Wholesale USA", "Wholesale International", "Retail"
-- "distributor_id": l'id exact du distributeur si trouvé dans la liste, sinon null
-- "items": tableau de {"product_id": "id exact ou null", "product_name_found": "nom trouvé dans la facture", "quantity": nombre, "unit_price": nombre}
-- "note": toute information utile
-
-Produits disponibles : [${productList}]
-Distributeurs disponibles : [${distList}]
-
-IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond approximativement. Si aucun produit ne correspond, mets null. Retourne UNIQUEMENT le JSON, rien d'autre.`
+      const systemOverride = 'Tu es un assistant comptable pour Clique Beauty Skincare LLC. Analyse cette facture de vente et retourne UNIQUEMENT un objet JSON (sans markdown) avec : "date" (YYYY-MM-DD), "reference" (numéro de facture uniquement), "channel" (exactement un de : "E-commerce", "Wholesale USA", "Wholesale International", "Retail"), "distributor_id" (id exact ou null), "items": [{"product_id": "id exact ou null", "product_name_found": "nom trouvé", "quantity": nombre, "unit_price": nombre}], "note" (string optionnel). Produits disponibles : [' + productList + ']. Distributeurs disponibles : [' + distList + ']. Retourne UNIQUEMENT le JSON.'
 
       const resp = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, content, mediaType: file.type, filename: file.name, systemOverride, mode: 'sale' })
       })
-
       const data = await resp.json()
       if (data.error) throw new Error(data.error)
-
       const sale = data.sale
       if (!sale) throw new Error('Réponse inattendue')
 
-      // Prefill form
-      setForm(f => ({
-        ...f,
-        date: sale.date || f.date,
-        reference: sale.reference || '',
-        channel: sale.channel || 'E-commerce',
-        distributor_id: sale.distributor_id || '',
-        note: sale.note || ''
-      }))
-
-      // Prefill items
+      setForm(f => ({ ...f, date: sale.date || f.date, reference: sale.reference || '', channel: sale.channel || 'E-commerce', distributor_id: sale.distributor_id || '', note: sale.note || '' }))
       if (sale.items?.length > 0) {
-        setItems(sale.items.map(i => ({
-          product_id: i.product_id || '',
-          quantity: i.quantity?.toString() || '',
-          unit_price: i.unit_price?.toString() || '',
-          _name_found: i.product_name_found
-        })))
+        setItems(sale.items.map(i => ({ product_id: i.product_id || '', quantity: i.quantity?.toString() || '', unit_price: i.unit_price?.toString() || '', _name_found: i.product_name_found })))
       }
-
       setShowUpload(false)
       setShowModal(true)
     } catch (err) {
-      alert('Erreur lors de l\'analyse : ' + err.message)
+      alert('Erreur : ' + err.message)
     } finally {
       setAnalyzing(false)
     }
   }
 
-  const totalOrders = orders.length
   const totalCA = orders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
   const ecomCA = orders.filter(o => o.channel === 'E-commerce').reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
   const wsCA = orders.filter(o => o.channel !== 'E-commerce').reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
@@ -168,7 +147,7 @@ IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond 
       <div className="page-header">
         <div>
           <h1>Ventes</h1>
-          <p>{totalOrders} commande{totalOrders !== 1 ? 's' : ''} · CA total {usd(totalCA)}</p>
+          <p>{orders.length} commande{orders.length !== 1 ? 's' : ''} · CA total {usd(totalCA)}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setShowUpload(true)}>⬆ Analyser une facture</button>
@@ -177,57 +156,27 @@ IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond 
       </div>
 
       <div className="metrics-grid" style={{ marginBottom: '1.5rem' }}>
-        {[
-          ['CA Total', usd(totalCA), '#2E7D32'],
-          ['Commandes', totalOrders, '#1565C0'],
-          ['E-commerce', usd(ecomCA), '#6A1B9A'],
-          ['Wholesale', usd(wsCA), '#E65100'],
-        ].map(([l, v, c]) => (
-          <div key={l} className="metric-card">
-            <div className="label">{l}</div>
-            <div className="value" style={{ color: c }}>{v}</div>
-          </div>
+        {[['CA Total', usd(totalCA), '#2E7D32'], ['Commandes', orders.length, '#1565C0'], ['E-commerce', usd(ecomCA), '#6A1B9A'], ['Wholesale', usd(wsCA), '#E65100']].map(([l, v, c]) => (
+          <div key={l} className="metric-card"><div className="label">{l}</div><div className="value" style={{ color: c }}>{v}</div></div>
         ))}
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? <div className="loading">Chargement…</div> : orders.length === 0 ? (
-          <div className="empty-state">
-            <div style={{ fontSize: 36 }}>🛍️</div>
-            <p>Aucune vente enregistrée</p>
-          </div>
+          <div className="empty-state"><div style={{ fontSize: 36 }}>🛍️</div><p>Aucune vente enregistrée</p></div>
         ) : (
           <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Référence</th>
-                <th>Canal</th>
-                <th>Distributeur</th>
-                <th>Produits</th>
-                <th style={{ textAlign: 'right' }}>Montant</th>
-                <th></th>
-              </tr>
-            </thead>
+            <thead><tr><th>Date</th><th>Référence</th><th>Canal</th><th>Distributeur</th><th>Produits</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
             <tbody>
               {orders.map(o => (
                 <tr key={o.id}>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fdate(o.date)}</td>
                   <td style={{ fontWeight: 500 }}>{o.reference || o.id.slice(0, 8)}</td>
-                  <td>
-                    <span className="pill" style={{
-                      background: o.channel === 'E-commerce' ? '#E8EAF6' : '#E8F5E9',
-                      color: o.channel === 'E-commerce' ? '#283593' : '#2E7D32'
-                    }}>{o.channel}</span>
-                  </td>
+                  <td><span className="pill" style={{ background: o.channel === 'E-commerce' ? '#E8EAF6' : '#E8F5E9', color: o.channel === 'E-commerce' ? '#283593' : '#2E7D32' }}>{o.channel}</span></td>
                   <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{o.distributors?.name || '—'}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {o.sale_items?.map(i => `${i.inventory?.product_name} ×${i.quantity}`).join(', ')}
-                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.sale_items?.map(i => i.inventory?.product_name + ' ×' + i.quantity).join(', ')}</td>
                   <td style={{ textAlign: 'right', fontWeight: 600, color: '#2E7D32' }}>{usd(o.total_amount)}</td>
-                  <td>
-                    <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => deleteOrder(o.id)}>Annuler</button>
-                  </td>
+                  <td><button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => deleteOrder(o.id)}>Annuler</button></td>
                 </tr>
               ))}
             </tbody>
@@ -235,32 +184,44 @@ IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond 
         )}
       </div>
 
+      {/* Duplicate confirmation modal */}
+      {dupConfirm && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{ maxWidth: 460 }}>
+            <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ textAlign: 'center', marginBottom: 8 }}>Doublon détecté</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginBottom: '1.25rem' }}>
+              {dupConfirm.message}
+            </p>
+            <p style={{ fontSize: 13, textAlign: 'center', marginBottom: '1.5rem' }}>
+              Veux-tu enregistrer cette vente quand même ?
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button className="primary" onClick={() => doSave(true)} disabled={saving} style={{ padding: '10px', fontSize: 13 }}>
+                {saving ? 'Enregistrement…' : 'Oui, enregistrer quand même'}
+              </button>
+              <button onClick={() => setDupConfirm(null)} style={{ padding: '10px', fontSize: 13 }}>
+                Non, annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upload modal */}
       {showUpload && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowUpload(false)}>
           <div className="modal">
             <h2>Analyser une facture de vente</h2>
-            <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }}
-              onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
-            <div className="drop-zone" onClick={() => !analyzing && inputRef.current?.click()}>
+            <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }} onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
+            <div className="drop-zone" onClick={() => !analyzing && inputRef.current && inputRef.current.click()}>
               {analyzing ? (
-                <>
-                  <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
-                  <p style={{ fontWeight: 500 }}>{analyzeMsg}</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Claude identifie les produits, quantités et prix…</p>
-                </>
+                <><div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div><p style={{ fontWeight: 500 }}>{analyzeMsg}</p><p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Claude identifie les produits, quantités et prix…</p></>
               ) : (
-                <>
-                  <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
-                  <p style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Déposer la facture client</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>JPG, PNG, PDF, CSV, XLSX</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Claude va extraire : date, référence, canal, produits, quantités et prix</p>
-                </>
+                <><div style={{ fontSize: 36, marginBottom: 10 }}>📄</div><p style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Déposer la facture client</p><p style={{ fontSize: 12, color: 'var(--text-muted)' }}>JPG, PNG, PDF, CSV, XLSX</p></>
               )}
             </div>
-            <div className="form-actions">
-              <button onClick={() => setShowUpload(false)}>Fermer</button>
-            </div>
+            <div className="form-actions"><button onClick={() => setShowUpload(false)}>Fermer</button></div>
           </div>
         </div>
       )}
@@ -296,22 +257,16 @@ IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond 
               </div>
             </div>
 
-            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '1rem 0 8px' }}>
-              Produits vendus
-            </div>
-
+            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '1rem 0 8px' }}>Produits vendus</div>
             {items.map((item, i) => (
               <div key={i} style={{ marginBottom: 10 }}>
                 {item._name_found && !item.product_id && (
-                  <div style={{ fontSize: 11, color: '#E65100', marginBottom: 4 }}>
-                    ⚠ Produit détecté : "{item._name_found}" — sélectionne-le manuellement
-                  </div>
+                  <div style={{ fontSize: 11, color: '#E65100', marginBottom: 4 }}>⚠ Produit détecté : "{item._name_found}" — sélectionne-le manuellement</div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 32px', gap: 8, alignItems: 'end' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     {i === 0 && <label>Produit</label>}
-                    <select value={item.product_id} onChange={e => updateItem(i, 'product_id', e.target.value)}
-                      style={{ borderColor: item._name_found && !item.product_id ? '#E65100' : undefined }}>
+                    <select value={item.product_id} onChange={e => updateItem(i, 'product_id', e.target.value)} style={{ borderColor: item._name_found && !item.product_id ? '#E65100' : undefined }}>
                       <option value="">— Choisir —</option>
                       {products.map(p => <option key={p.id} value={p.id}>{p.product_name} (stock: {p.quantity_on_hand})</option>)}
                     </select>
@@ -328,7 +283,6 @@ IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond 
                 </div>
               </div>
             ))}
-
             <button onClick={addItem} style={{ fontSize: 12, marginBottom: '1rem' }}>+ Ajouter un produit</button>
 
             {totalRevenue > 0 && (
@@ -337,15 +291,13 @@ IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   <div><span style={{ color: '#546E7A' }}>CA :</span> <strong style={{ color: '#2E7D32' }}>{usd(totalRevenue)}</strong></div>
                   <div><span style={{ color: '#546E7A' }}>Coût :</span> <strong style={{ color: '#C62828' }}>{usd(totalCogs)}</strong></div>
-                  <div><span style={{ color: '#546E7A' }}>Marge :</span> <strong style={{ color: totalRevenue - totalCogs >= 0 ? '#2E7D32' : '#C62828' }}>
-                    {usd(totalRevenue - totalCogs)} ({totalRevenue > 0 ? (((totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1) : 0}%)
-                  </strong></div>
+                  <div><span style={{ color: '#546E7A' }}>Marge :</span> <strong style={{ color: totalRevenue - totalCogs >= 0 ? '#2E7D32' : '#C62828' }}>{usd(totalRevenue - totalCogs)} ({totalRevenue > 0 ? (((totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1) : 0}%)</strong></div>
                 </div>
               </div>
             )}
 
             <div className="form-actions">
-              <button className="primary" onClick={save} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer la vente'}</button>
+              <button className="primary" onClick={() => doSave(false)} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer la vente'}</button>
               <button onClick={() => setShowModal(false)}>Annuler</button>
             </div>
           </div>

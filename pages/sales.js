@@ -14,7 +14,11 @@ export default function Sales() {
   const [showUpload, setShowUpload] = useState(false)
   const [saving, setSaving] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
-  const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], channel: 'E-commerce', distributor_id: '', reference: '', note: '' })
+  const [analyzeMsg, setAnalyzeMsg] = useState('')
+  const [form, setForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    channel: 'E-commerce', distributor_id: '', reference: '', note: ''
+  })
   const [items, setItems] = useState([{ product_id: '', quantity: '', unit_price: '' }])
   const inputRef = useRef()
 
@@ -45,7 +49,10 @@ export default function Sales() {
   }, 0)
 
   const save = async () => {
-    if (!form.date || items.some(i => !i.product_id || !i.quantity || !i.unit_price)) return
+    if (!form.date || items.some(i => !i.product_id || !i.quantity || !i.unit_price)) {
+      alert('Remplis tous les champs obligatoires (produit, quantité, prix)')
+      return
+    }
     setSaving(true)
     const enrichedItems = items.map(i => {
       const prod = products.find(p => p.id === i.product_id)
@@ -73,54 +80,88 @@ export default function Sales() {
 
   const analyzeFile = async (file) => {
     setAnalyzing(true)
-    let content, type
-    if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
-      const reader = new FileReader()
-      content = await new Promise((res, rej) => {
-        reader.onload = (e) => {
-          const data = new Uint8Array(e.target.result)
-          const wb = XLSX.read(data, { type: 'array' })
-          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])
-          res(csv)
-        }
-        reader.onerror = rej
-        reader.readAsArrayBuffer(file)
-      })
-      type = 'spreadsheet'
-    } else {
-      content = await new Promise((res, rej) => {
-        const r = new FileReader()
-        r.onload = () => res(r.result.split(',')[1])
-        r.onerror = rej
-        r.readAsDataURL(file)
-      })
-      type = file.type.startsWith('image/') ? 'image' : 'pdf'
-    }
+    setAnalyzeMsg('Lecture du fichier…')
+    try {
+      let content, type
 
-    const productList = products.map(p => `${p.product_name} (id: ${p.id})`).join(', ')
-    const resp = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type, content, mediaType: file.type, filename: file.name,
-        systemOverride: `Tu es un assistant comptable. Extrait les informations de vente de ce document. Produits disponibles : ${productList}. Retourne UNIQUEMENT un JSON avec: "date" (YYYY-MM-DD), "reference" (string), "channel" ("E-commerce" ou "Wholesale USA"), "items": [{"product_id": "uuid exact", "quantity": number, "unit_price": number}]. Si le produit n'est pas trouvé exactement, utilise product_id: "unknown".`
-      })
-    })
-    const data = await resp.json()
-    setAnalyzing(false)
+      if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const ab = await file.arrayBuffer()
+        const wb = XLSX.read(new Uint8Array(ab), { type: 'array' })
+        content = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])
+        type = 'spreadsheet'
+      } else {
+        content = await new Promise((res, rej) => {
+          const r = new FileReader()
+          r.onload = () => res(r.result.split(',')[1])
+          r.onerror = rej
+          r.readAsDataURL(file)
+        })
+        type = file.type.startsWith('image/') ? 'image' : 'pdf'
+      }
 
-    if (data.transactions?.[0]) {
-      const t = data.transactions[0]
-      if (t.date) setForm(f => ({ ...f, date: t.date, reference: t.note || f.reference }))
+      const productList = products.map(p => `{"id":"${p.id}","name":"${p.product_name}"}`).join(', ')
+      const distList = distributors.map(d => `{"id":"${d.id}","name":"${d.name}","channel":"${d.channel}"}`).join(', ')
+
+      setAnalyzeMsg('Analyse par Claude…')
+
+      const systemOverride = `Tu es un assistant comptable pour Clique Beauty Skincare LLC. Analyse cette facture de vente et retourne UNIQUEMENT un objet JSON (sans markdown) avec ces champs :
+- "date": date de la facture (YYYY-MM-DD)
+- "reference": numéro de facture (juste le numéro, ex: "INV-001")
+- "channel": exactement un de : "E-commerce", "Wholesale USA", "Wholesale International", "Retail"
+- "distributor_id": l'id exact du distributeur si trouvé dans la liste, sinon null
+- "items": tableau de {"product_id": "id exact ou null", "product_name_found": "nom trouvé dans la facture", "quantity": nombre, "unit_price": nombre}
+- "note": toute information utile
+
+Produits disponibles : [${productList}]
+Distributeurs disponibles : [${distList}]
+
+IMPORTANT: Pour product_id, utilise l'id exact de la liste si le nom correspond approximativement. Si aucun produit ne correspond, mets null. Retourne UNIQUEMENT le JSON, rien d'autre.`
+
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, content, mediaType: file.type, filename: file.name, systemOverride, mode: 'sale' })
+      })
+
+      const data = await resp.json()
+      if (data.error) throw new Error(data.error)
+
+      const sale = data.sale
+      if (!sale) throw new Error('Réponse inattendue')
+
+      // Prefill form
+      setForm(f => ({
+        ...f,
+        date: sale.date || f.date,
+        reference: sale.reference || '',
+        channel: sale.channel || 'E-commerce',
+        distributor_id: sale.distributor_id || '',
+        note: sale.note || ''
+      }))
+
+      // Prefill items
+      if (sale.items?.length > 0) {
+        setItems(sale.items.map(i => ({
+          product_id: i.product_id || '',
+          quantity: i.quantity?.toString() || '',
+          unit_price: i.unit_price?.toString() || '',
+          _name_found: i.product_name_found
+        })))
+      }
+
+      setShowUpload(false)
+      setShowModal(true)
+    } catch (err) {
+      alert('Erreur lors de l\'analyse : ' + err.message)
+    } finally {
+      setAnalyzing(false)
     }
-    setShowUpload(false)
-    setShowModal(true)
   }
 
   const totalOrders = orders.length
   const totalCA = orders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
-  const ecomOrders = orders.filter(o => o.channel === 'E-commerce')
-  const wsOrders = orders.filter(o => o.channel !== 'E-commerce')
+  const ecomCA = orders.filter(o => o.channel === 'E-commerce').reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
+  const wsCA = orders.filter(o => o.channel !== 'E-commerce').reduce((a, o) => a + parseFloat(o.total_amount || 0), 0)
 
   return (
     <Layout>
@@ -131,20 +172,20 @@ export default function Sales() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setShowUpload(true)}>⬆ Analyser une facture</button>
-          <button className="primary" onClick={() => setShowModal(true)}>+ Nouvelle vente</button>
+          <button className="primary" onClick={() => { setItems([{ product_id: '', quantity: '', unit_price: '' }]); setShowModal(true) }}>+ Nouvelle vente</button>
         </div>
       </div>
 
       <div className="metrics-grid" style={{ marginBottom: '1.5rem' }}>
         {[
-          ['CA Total', totalCA, '#2E7D32'],
+          ['CA Total', usd(totalCA), '#2E7D32'],
           ['Commandes', totalOrders, '#1565C0'],
-          ['E-commerce', ecomOrders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0), '#6A1B9A'],
-          ['Wholesale', wsOrders.reduce((a, o) => a + parseFloat(o.total_amount || 0), 0), '#E65100'],
+          ['E-commerce', usd(ecomCA), '#6A1B9A'],
+          ['Wholesale', usd(wsCA), '#E65100'],
         ].map(([l, v, c]) => (
           <div key={l} className="metric-card">
             <div className="label">{l}</div>
-            <div className="value" style={{ color: c }}>{typeof v === 'number' && l !== 'Commandes' ? usd(v) : v}</div>
+            <div className="value" style={{ color: c }}>{v}</div>
           </div>
         ))}
       </div>
@@ -194,19 +235,26 @@ export default function Sales() {
         )}
       </div>
 
+      {/* Upload modal */}
       {showUpload && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowUpload(false)}>
           <div className="modal">
             <h2>Analyser une facture de vente</h2>
-            <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }} onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
-            <div className="drop-zone" onClick={() => inputRef.current?.click()}>
+            <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }}
+              onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
+            <div className="drop-zone" onClick={() => !analyzing && inputRef.current?.click()}>
               {analyzing ? (
-                <p style={{ color: 'var(--text-muted)' }}>Analyse en cours…</p>
+                <>
+                  <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+                  <p style={{ fontWeight: 500 }}>{analyzeMsg}</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Claude identifie les produits, quantités et prix…</p>
+                </>
               ) : (
                 <>
                   <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
-                  <p style={{ fontWeight: 500 }}>Déposer la facture client</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>JPG, PNG, PDF, CSV, XLSX</p>
+                  <p style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Déposer la facture client</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>JPG, PNG, PDF, CSV, XLSX</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Claude va extraire : date, référence, canal, produits, quantités et prix</p>
                 </>
               )}
             </div>
@@ -217,6 +265,7 @@ export default function Sales() {
         </div>
       )}
 
+      {/* Sale modal */}
       {showModal && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div className="modal" style={{ maxWidth: 680 }}>
@@ -247,14 +296,22 @@ export default function Sales() {
               </div>
             </div>
 
-            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '1rem 0 8px' }}>Produits vendus</div>
-            {items.map((item, i) => {
-              const prod = products.find(p => p.id === item.product_id)
-              return (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 32px', gap: 8, marginBottom: 8, alignItems: 'end' }}>
+            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '1rem 0 8px' }}>
+              Produits vendus
+            </div>
+
+            {items.map((item, i) => (
+              <div key={i} style={{ marginBottom: 10 }}>
+                {item._name_found && !item.product_id && (
+                  <div style={{ fontSize: 11, color: '#E65100', marginBottom: 4 }}>
+                    ⚠ Produit détecté : "{item._name_found}" — sélectionne-le manuellement
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 32px', gap: 8, alignItems: 'end' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     {i === 0 && <label>Produit</label>}
-                    <select value={item.product_id} onChange={e => updateItem(i, 'product_id', e.target.value)}>
+                    <select value={item.product_id} onChange={e => updateItem(i, 'product_id', e.target.value)}
+                      style={{ borderColor: item._name_found && !item.product_id ? '#E65100' : undefined }}>
                       <option value="">— Choisir —</option>
                       {products.map(p => <option key={p.id} value={p.id}>{p.product_name} (stock: {p.quantity_on_hand})</option>)}
                     </select>
@@ -269,8 +326,9 @@ export default function Sales() {
                   </div>
                   <button onClick={() => removeItem(i)} style={{ padding: '8px', color: '#C62828', border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', marginTop: i === 0 ? 20 : 0 }}>×</button>
                 </div>
-              )
-            })}
+              </div>
+            ))}
+
             <button onClick={addItem} style={{ fontSize: 12, marginBottom: '1rem' }}>+ Ajouter un produit</button>
 
             {totalRevenue > 0 && (
@@ -279,7 +337,9 @@ export default function Sales() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   <div><span style={{ color: '#546E7A' }}>CA :</span> <strong style={{ color: '#2E7D32' }}>{usd(totalRevenue)}</strong></div>
                   <div><span style={{ color: '#546E7A' }}>Coût :</span> <strong style={{ color: '#C62828' }}>{usd(totalCogs)}</strong></div>
-                  <div><span style={{ color: '#546E7A' }}>Marge :</span> <strong style={{ color: totalRevenue - totalCogs >= 0 ? '#2E7D32' : '#C62828' }}>{usd(totalRevenue - totalCogs)} ({totalRevenue > 0 ? ((( totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1) : 0}%)</strong></div>
+                  <div><span style={{ color: '#546E7A' }}>Marge :</span> <strong style={{ color: totalRevenue - totalCogs >= 0 ? '#2E7D32' : '#C62828' }}>
+                    {usd(totalRevenue - totalCogs)} ({totalRevenue > 0 ? (((totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1) : 0}%)
+                  </strong></div>
                 </div>
               </div>
             )}

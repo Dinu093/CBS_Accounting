@@ -41,10 +41,13 @@ export default function Distribution() {
 
   // Modals
   const [showDistModal, setShowDistModal] = useState(false)
+  const [editingDist, setEditingDist] = useState(null)
+  const [editingLoc, setEditingLoc] = useState(null)
   const [showPriceModal, setShowPriceModal] = useState(false)
   const [showGiftedModal, setShowGiftedModal] = useState(false)
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [showLocationModal, setShowLocationModal] = useState(false)
+  const [editingLoc, setEditingLoc] = useState(null)
   const [selectedDist, setSelectedDist] = useState(null)
 
   // Forms
@@ -117,15 +120,23 @@ export default function Distribution() {
   const saveDist = async () => {
     if (!distForm.name) return
     setSaving(true)
-    await fetch('/api/distributors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'distributor', ...distForm }) })
-    setSaving(false); setShowDistModal(false); setDistForm(EMPTY_DIST); load()
+    if (editingDist) {
+      await fetch('/api/distributors', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'distributor', id: editingDist, ...distForm }) })
+    } else {
+      await fetch('/api/distributors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'distributor', ...distForm }) })
+    }
+    setSaving(false); setShowDistModal(false); setDistForm(EMPTY_DIST); setEditingDist(null); load()
   }
 
   const saveLocation = async () => {
     if (!locForm.name || !locForm.distributor_id) return
     setSaving(true)
-    await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(locForm) })
-    setSaving(false); setShowLocationModal(false); setLocForm(EMPTY_LOC); load()
+    if (editingLoc) {
+      await fetch('/api/locations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingLoc, ...locForm }) })
+    } else {
+      await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(locForm) })
+    }
+    setSaving(false); setShowLocationModal(false); setEditingLoc(null); setLocForm(EMPTY_LOC); load()
   }
 
   const savePrice = async () => {
@@ -265,7 +276,10 @@ export default function Distribution() {
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{d.name}</div>
                         <span className="pill" style={{ marginTop: 4, background: d.channel === 'E-commerce' ? '#E8EAF6' : 'var(--green-light)', color: d.channel === 'E-commerce' ? '#283593' : 'var(--green)' }}>{d.channel}</span>
                       </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => { setDistForm({ name: d.name, channel: d.channel, contact: d.contact || '', note: d.note || '' }); setEditingDist(d.id); setShowDistModal(true) }} style={{ border: 'none', background: 'none', color: 'var(--blue-pearl)', cursor: 'pointer', fontSize: 12, padding: '2px 6px' }}>Edit</button>
                       <button onClick={() => deleteDist(d.id)} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+                    </div>
                     </div>
                     {d.contact && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{d.contact}</div>}
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 12, marginBottom: 10 }}>
@@ -284,7 +298,13 @@ export default function Distribution() {
                               {loc.contact_name && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{loc.contact_name}{loc.email ? ' · ' + loc.email : ''}</div>}
                               {loc.address && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{loc.address}, {loc.city} {loc.state} {loc.zip}</div>}
                             </div>
-                            <button onClick={() => deleteLoc(loc.id)} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}>×</button>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => { setEditingLoc(loc.id); setLocForm({ distributor_id: loc.distributor_id, name: loc.name, contact_name: loc.contact_name || '', email: loc.email || '', phone: loc.phone || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', zip: loc.zip || '', is_primary: loc.is_primary || false }); setShowLocationModal(true) }} style={{ border: 'none', background: 'none', color: 'var(--blue-pearl)', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}>Edit</button>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => { setLocForm({ distributor_id: d.id, name: loc.name, contact_name: loc.contact_name || '', email: loc.email || '', phone: loc.phone || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', zip: loc.zip || '', is_primary: loc.is_primary || false }); setEditingLoc(loc.id); setShowLocationModal(true) }} style={{ border: 'none', background: 'none', color: 'var(--blue-pearl)', cursor: 'pointer', fontSize: 11, padding: '2px 4px' }}>Edit</button>
+                              <button onClick={() => deleteLoc(loc.id)} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}>×</button>
+                            </div>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -379,7 +399,7 @@ export default function Distribution() {
       {showDistModal && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowDistModal(false)}>
           <div className="modal">
-            <h2>New distributor</h2>
+            <h2>{editingDist ? 'Edit distributor' : 'New distributor'}</h2>
             <div className="form-group"><label>Name *</label><input type="text" placeholder="e.g. Beauty Bay, Sephora…" value={distForm.name} onChange={e => setDistForm({ ...distForm, name: e.target.value })} /></div>
             <div className="form-group"><label>Channel</label>
               <select value={distForm.channel} onChange={e => setDistForm({ ...distForm, channel: e.target.value })}>
@@ -388,7 +408,7 @@ export default function Distribution() {
             </div>
             <div className="form-group"><label>Contact (email or name)</label><input type="text" placeholder="contact@distributor.com" value={distForm.contact} onChange={e => setDistForm({ ...distForm, contact: e.target.value })} /></div>
             <div className="form-group"><label>US State (e.g. KY) — for heat map</label><input type="text" placeholder="KY" maxLength={2} value={distForm.note} onChange={e => setDistForm({ ...distForm, note: e.target.value.toUpperCase() })} /></div>
-            <div className="form-actions"><button className="primary" onClick={saveDist} disabled={saving}>{saving ? 'Saving…' : 'Add distributor'}</button><button onClick={() => setShowDistModal(false)}>Cancel</button></div>
+            <div className="form-actions"><button className="primary" onClick={saveDist} disabled={saving}>{saving ? 'Saving…' : editingDist ? 'Save changes' : 'Add distributor'}</button><button onClick={() => { setShowDistModal(false); setEditingDist(null); setDistForm(EMPTY_DIST) }}>Cancel</button></div>
           </div>
         </div>
       )}
@@ -397,7 +417,7 @@ export default function Distribution() {
       {showLocationModal && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowLocationModal(false)}>
           <div className="modal" style={{ maxWidth: 620 }}>
-            <h2>Add location</h2>
+            <h2>{editingLoc ? 'Edit location' : 'Add location'}</h2>
             <div className="form-row">
               <div className="form-group"><label>Distributor *</label>
                 <select value={locForm.distributor_id} onChange={e => setLocForm({ ...locForm, distributor_id: e.target.value })}>
@@ -424,7 +444,7 @@ export default function Distribution() {
               <input type="checkbox" id="primary-loc" checked={locForm.is_primary} onChange={e => setLocForm({ ...locForm, is_primary: e.target.checked })} style={{ width: 'auto' }} />
               <label htmlFor="primary-loc" style={{ fontSize: 13, cursor: 'pointer', marginBottom: 0, textTransform: 'none', letterSpacing: 0 }}>Primary location (pre-selected by default)</label>
             </div>
-            <div className="form-actions"><button className="primary" onClick={saveLocation} disabled={saving}>{saving ? 'Saving…' : 'Add location'}</button><button onClick={() => setShowLocationModal(false)}>Cancel</button></div>
+            <div className="form-actions"><button className="primary" onClick={saveLocation} disabled={saving}>{saving ? 'Saving…' : editingLoc ? 'Save changes' : 'Add location'}</button><button onClick={() => { setShowLocationModal(false); setEditingLoc(null); setLocForm(EMPTY_LOC) }}>Cancel</button></div>
           </div>
         </div>
       )}

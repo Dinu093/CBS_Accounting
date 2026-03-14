@@ -298,11 +298,8 @@ export default function Distribution() {
                               {loc.address && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{loc.address}, {loc.city} {loc.state} {loc.zip}</div>}
                             </div>
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={() => { setEditingLoc(loc.id); setLocForm({ distributor_id: loc.distributor_id, name: loc.name, contact_name: loc.contact_name || '', email: loc.email || '', phone: loc.phone || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', zip: loc.zip || '', is_primary: loc.is_primary || false }); setShowLocationModal(true) }} style={{ border: 'none', background: 'none', color: 'var(--blue-pearl)', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}>Edit</button>
-                              <div style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={() => { setLocForm({ distributor_id: d.id, name: loc.name, contact_name: loc.contact_name || '', email: loc.email || '', phone: loc.phone || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', zip: loc.zip || '', is_primary: loc.is_primary || false }); setEditingLoc(loc.id); setShowLocationModal(true) }} style={{ border: 'none', background: 'none', color: 'var(--blue-pearl)', cursor: 'pointer', fontSize: 11, padding: '2px 4px' }}>Edit</button>
+                              <button onClick={() => { setLocForm({ distributor_id: loc.distributor_id || d.id, name: loc.name, contact_name: loc.contact_name || '', email: loc.email || '', phone: loc.phone || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', zip: loc.zip || '', is_primary: loc.is_primary || false }); setEditingLoc(loc.id); setShowLocationModal(true) }} style={{ border: 'none', background: 'none', color: 'var(--blue-pearl)', cursor: 'pointer', fontSize: 12, padding: '2px 4px' }}>Edit</button>
                               <button onClick={() => deleteLoc(loc.id)} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}>×</button>
-                            </div>
                             </div>
                           </div>
                         ))}

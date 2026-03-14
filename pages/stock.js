@@ -112,11 +112,18 @@ export default function Stock() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...shipForm,
-        freight_cost: freight,
-        customs_cost: customs,
-        packaging_cost: packaging,
-        items,
+        shipment: {
+          date: shipForm.date,
+          reference: shipForm.reference || 'RFC-' + new Date().toISOString().slice(0,10),
+          supplier: shipForm.supplier || '',
+          note: shipForm.note || '',
+          freight_cost: freight,
+          customs_cost: customs,
+          packaging_cost: packaging,
+          total_cost: totalCost,
+          total_product_cost: totalProdCost,
+        },
+        items: items.map(i => ({ ...i, unit_purchase_price: parseFloat(i.unit_cost) || 0 })),
       })
     })
     const data = await resp.json()

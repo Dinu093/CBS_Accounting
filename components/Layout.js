@@ -7,9 +7,9 @@ const NAV = [
     { href: '/', icon: '▣', label: 'Dashboard' },
   ]},
   { group: 'Operations', items: [
-    { href: '/products',  icon: '◻', label: 'Products' },
-    { href: '/stock',     icon: '◈', label: 'Stock' },
-    { href: '/wholesale', icon: '◎', label: 'Wholesale' },
+    { href: '/products', icon: '◻', label: 'Products' },
+    { href: '/stock',    icon: '◈', label: 'Stock' },
+    { href: '/sales',   icon: '◎', label: 'Sales' },
   ]},
   { group: 'Finance', items: [
     { href: '/income',   icon: '↑', label: 'Income' },

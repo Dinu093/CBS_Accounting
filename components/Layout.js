@@ -13,7 +13,7 @@ const NAV = [
   ]},
   { group: 'Opérations', items: [
     { href: '/inventory',    icon: '◫', label: 'Inventaire' },
-    { href: '/costs',        icon: '◈', label: 'Coûts de revient' },
+    { href: '/costs',        icon: '◈', label: 'Shipments & Imports' },
     { href: '/distribution', icon: '◎', label: 'Distribution' },
   ]},
   { group: 'Analyse', items: [

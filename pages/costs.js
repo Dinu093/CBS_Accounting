@@ -29,6 +29,12 @@ export default function Costs() {
     })
   }
 
+  const deleteShipment = async (id) => {
+    if (!confirm('Supprimer ce shipment ? Le stock sera ajusté.')) return
+    await fetch('/api/shipments?id=' + id, { method: 'DELETE' })
+    load()
+  }
+
   useEffect(() => { load() }, [])
 
   const addItem = () => setItems([...items, { product_id: '', quantity: '', unit_purchase_price: '' }])
@@ -64,7 +70,7 @@ export default function Costs() {
     <Layout>
       <div className="page-header">
         <div>
-          <h1>Coûts de revient</h1>
+          <h1>Shipments & Imports</h1>
           <p>Shipments d'achat — coûts alloués par unité automatiquement</p>
         </div>
         <button className="primary" onClick={() => setShowModal(true)}>+ Nouveau shipment</button>
@@ -119,7 +125,12 @@ export default function Costs() {
               ))}
             </div>
 
-            {ship.shipment_items?.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <button className="danger" style={{ fontSize: 11, padding: '5px 12px' }} onClick={() => deleteShipment(ship.id)}>
+              Supprimer ce shipment
+            </button>
+          </div>
+          {ship.shipment_items?.length > 0 && (
               <table>
                 <thead>
                   <tr>
@@ -231,6 +242,3 @@ export default function Costs() {
     </Layout>
   )
 }
-
-
-export async function getServerSideProps() { return { props: {} } }

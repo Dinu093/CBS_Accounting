@@ -107,7 +107,7 @@ export default async function handler(req, res) {
       // Deduct from inventory
       const { data: prod } = await supabase.from('inventory').select('quantity_on_hand').eq('id', item.product_id).single()
       if (prod) {
-        await supabase.from('inventory').update({ quantity_on_hand: Math.max(0, parseFloat(prod.quantity_on_hand) - qty) }).eq('id', item.product_id)
+        await supabase.from('inventory').update({ quantity_on_hand: parseFloat(prod.quantity_on_hand) - qty }).eq('id', item.product_id)
       }
     }
 

@@ -100,6 +100,14 @@ export default async function handler(req, res) {
     return res.json({ success: true, order_id: orderId })
   }
 
+
+  if (req.method === 'PUT') {
+    const { id, ...updates } = req.body
+    const { data, error } = await supabase.from('sales_orders').update(updates).eq('id', id).select()
+    if (error) return res.status(500).json({ error: error.message })
+    return res.json(data[0])
+  }
+
   if (req.method === 'DELETE') {
     const { id } = req.query
     const { data: order } = await supabase.from('sales_orders').select('sale_items(*)').eq('id', id).single()

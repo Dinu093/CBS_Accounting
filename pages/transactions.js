@@ -17,64 +17,53 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { transactions } = req.body
-
-    const results = []
+    const inserted = []
     const duplicates = []
 
-    for (const t of transactions) {
-      const amount = parseFloat(t.amount) || 0
+    for (const tx of transactions) {
+      const amount = parseFloat(tx.amount) || 0
 
-      // Check for duplicate: same date + amount + category
-      const { data: existing } = await supabase
+      // Check duplicate: same date + amount + category
+      const { data: found } = await supabase
         .from('transactions')
         .select('id, date, amount, description, note')
-        .eq('date', t.date)
+        .eq('date', tx.date)
         .eq('amount', amount)
-        .eq('category', t.category)
+        .eq('category', tx.category)
 
-      if (existing && existing.length > 0) {
-        // Also check note/reference similarity if available
-        const sameRef = t.note && existing.some(e =>
-          e.note && e.note.toLowerCase().trim() === t.note.toLowerCase().trim()
-        )
-        const sameDesc = existing.some(e =>
-          e.description.toLowerCase().trim() === (t.description || '').toLowerCase().trim()
-        )
+      if (found && found.length > 0) {
+        const sameRef = tx.note && found.some(e => e.note && e.note.toLowerCase().trim() === tx.note.toLowerCase().trim())
+        const sameDesc = found.some(e => e.description.toLowerCase().trim() === (tx.description || '').toLowerCase().trim())
 
         if (sameRef || sameDesc) {
-          duplicates.push({
-            new: t,
-            existing: existing[0],
-            reason: sameRef ? 'Même référence, date et montant' : 'Même description, date et montant'
-          })
-          continue // skip inserting this one
+          duplicates.push({ newTx: tx, existingTx: found[0], reason: sameRef ? 'Même référence, date et montant' : 'Même description, date et montant' })
+          continue
         }
       }
 
-      const row = {
-        date: t.date,
-        description: t.description,
-        category: t.category,
-        type: t.type || t.category,
+      inserted.push({
+        date: tx.date,
+        description: tx.description,
+        category: tx.category,
+        type: tx.type || tx.category,
         amount,
-        note: t.note || null,
-      }
-      results.push(row)
+        note: tx.note || null,
+      })
     }
 
-    let inserted = []
-    if (results.length > 0) {
-      const { data, error } = await supabase.from('transactions').insert(results).select()
+    let savedRows = []
+    if (inserted.length > 0) {
+      const { data, error } = await supabase.from('transactions').insert(inserted).select()
       if (error) return res.status(500).json({ error: error.message })
-      inserted = data
+      savedRows = data
     }
 
     return res.json({
-      inserted,
+      inserted: savedRows,
       duplicates,
       message: duplicates.length > 0
-        ? `${inserted.length} transaction(s) enregistrée(s). ${duplicates.length} doublon(s) détecté(s) et ignoré(s).`
-        : `${inserted.length} transaction(s) enregistrée(s).`
+        ? `${savedRows.length} transaction(s) enregistrée(s). ${duplicates.length} doublon(s) ignoré(s).`
+        : `${savedRows.length} transaction(s) enregistrée(s).`
     })
   }
 

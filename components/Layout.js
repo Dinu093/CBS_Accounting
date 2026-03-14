@@ -18,6 +18,7 @@ const NAV = [
   ]},
   { group: 'Analytics', items: [
     { href: '/reports', icon: '▸', label: 'Reports' },
+    { href: '/map', icon: '◉', label: 'Customer Map' },
   ]},
 ]
 

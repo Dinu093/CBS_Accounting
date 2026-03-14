@@ -9,6 +9,7 @@ const NAV = [
   { group: 'Flux financiers', items: [
     { href: '/income',   icon: '↑', label: 'Encaissements' },
     { href: '/expenses', icon: '↓', label: 'Décaissements' },
+    { href: '/cashflow', icon: '⇄', label: 'Trésorerie AP/AR' },
   ]},
   { group: 'Opérations', items: [
     { href: '/inventory',    icon: '◫', label: 'Inventaire' },

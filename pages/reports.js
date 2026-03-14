@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
 import { CATEGORIES, usd, fdate } from '../lib/constants'
+import DateFilter, { filterByDate } from '../components/DateFilter'
 
 function pnlFromTxs(txs) {
   const sum = type => txs.filter(t => CATEGORIES[t.category] === type).reduce((a, t) => a + parseFloat(t.amount || 0), 0)
@@ -28,12 +29,14 @@ function PnlRow({ label, value, indent = false, bold = false, topBorder = false 
 export default function Reports() {
   const [txs, setTxs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [dateRange, setDateRange] = useState({ from: null, to: null })
 
   useEffect(() => {
     fetch('/api/transactions').then(r => r.json()).then(d => { setTxs(Array.isArray(d) ? d : []); setLoading(false) })
   }, [])
 
-  const p = pnlFromTxs(txs)
+  const filteredForPnl = filterByDate(txs, 'date', dateRange)
+  const p = pnlFromTxs(filteredForPnl)
 
   const exportCSV = () => {
     const rows = [
@@ -65,7 +68,7 @@ export default function Reports() {
         <button onClick={exportCSV}>⬇ Export CSV</button>
       </div>
 
-      {loading ? <div className="loading">Chargement…</div> : (
+      {loading ? <div className="loading">Chargement…</div> : (<><DateFilter onChange={setDateRange} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
           <div className="card">
             <div className="section-title" style={{ marginBottom: '0.5rem' }}>Compte de résultat — P&L</div>
@@ -139,6 +142,7 @@ export default function Reports() {
             </div>
           </div>
         </div>
+      </>
       )}
     </Layout>
   )

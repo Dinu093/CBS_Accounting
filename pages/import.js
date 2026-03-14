@@ -28,37 +28,103 @@ export default function Import() {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef()
 
+  // Parse Mercury CSV directly without Claude
+  const parseMercuryCSV = (csvText) => {
+    const lines = csvText.split('\n').filter(l => l.trim())
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+    const dateIdx = headers.findIndex(h => h.toLowerCase().includes('date'))
+    const descIdx = headers.findIndex(h => h.toLowerCase() === 'description')
+    const amtIdx = headers.findIndex(h => h.toLowerCase() === 'amount')
+    const catIdx = headers.findIndex(h => h.toLowerCase() === 'category')
+    const noteIdx = headers.findIndex(h => h.toLowerCase() === 'note')
+    const bankDescIdx = headers.findIndex(h => h.toLowerCase().includes('bank description'))
+
+    const parseRow = (line) => {
+      const cols = []
+      let cur = '', inQ = false
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ }
+        else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = '' }
+        else { cur += ch }
+      }
+      cols.push(cur.trim())
+      return cols
+    }
+
+    const guessCategory = (desc, bankDesc, mercuryCat, amount) => {
+      const d = (desc + ' ' + bankDesc + ' ' + mercuryCat).toLowerCase()
+      if (d.includes('la cara')) return 'Capital contribution'
+      if (d.includes('shopify') && amount > 0) return 'Sales — products'
+      if (d.includes('shopify')) return 'Website & tech'
+      if (d.includes('facebook') || d.includes('meta') || d.includes('facebk') || d.includes('advertising')) return 'Marketing & ads'
+      if (d.includes('google ads')) return 'Marketing & ads'
+      if (d.includes('bank fee') || d.includes('wire fee') || d.includes('transaction fee') || d.includes('mercury') || d.includes('subscription fee')) return amount < 0 ? 'Bank fees' : 'Capital contribution'
+      if (d.includes('microsoft') || d.includes('software') || d.includes('subscription')) return 'Website & tech'
+      if (d.includes('ups') || d.includes('fedex') || d.includes('usps') || d.includes('shipping')) return amount < 0 ? 'Shipping (outbound)' : 'Shipping (inbound)'
+      if (d.includes('legal') || d.includes('attorney') || d.includes('lawyer')) return 'Legal & professional fees'
+      if (amount > 0) return 'Sales — products'
+      return 'Other expense'
+    }
+
+    const convertDate = (d) => {
+      if (!d) return ''
+      // MM-DD-YYYY → YYYY-MM-DD
+      const m1 = d.match(/^(\d{2})-(\d{2})-(\d{4})/)
+      if (m1) return m1[3] + '-' + m1[1] + '-' + m1[2]
+      // Already YYYY-MM-DD
+      if (d.match(/^\d{4}-/)) return d.slice(0, 10)
+      return d
+    }
+
+    return lines.slice(1).filter(l => l.trim()).map((line, i) => {
+      const cols = parseRow(line)
+      const rawDate = cols[dateIdx] || ''
+      const desc = cols[descIdx] || ''
+      const amount = parseFloat(cols[amtIdx]) || 0
+      const mercuryCat = cols[catIdx] || ''
+      const bankDesc = bankDescIdx >= 0 ? cols[bankDescIdx] || '' : ''
+      const note = noteIdx >= 0 ? cols[noteIdx] || '' : ''
+      const category = guessCategory(desc, bankDesc, mercuryCat, amount)
+      return {
+        _pid: Date.now() + i,
+        date: convertDate(rawDate),
+        description: desc,
+        category,
+        amount: Math.abs(amount),
+        flow: amount >= 0 ? 'in' : 'out',
+        note
+      }
+    }).filter(t => t.date && t.amount > 0)
+  }
+
   const analyze = async (file) => {
     setLoading(true)
     setResult(null)
     setLoadingMsg('Reading file…')
     try {
-      const content = await readFile(file)
-      setLoadingMsg('Claude is analyzing all transactions…')
+      const name = file.name.toLowerCase()
+      const isCSVorXLSX = name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls')
 
+      if (isCSVorXLSX) {
+        // Parse directly — fast, no Claude needed for structured CSV
+        const text = await file.text()
+        const parsed = parseMercuryCSV(text)
+        if (parsed.length > 0) {
+          setPending(parsed)
+          setLoading(false)
+          return
+        }
+      }
+
+      // Fallback: use Claude for PDF/image or unrecognized CSV
+      setLoadingMsg('Claude is analyzing…')
+      const content = await readFile(file)
       const isText = typeof content === 'string'
       const body = isText
         ? { type: 'spreadsheet', content, filename: file.name }
         : { type: file.type.startsWith('image/') ? 'image' : 'pdf', content: content.b64, mediaType: content.mediaType, filename: file.name }
 
-      const systemOverride = `You are an accounting assistant for Clique Beauty Skincare LLC. Analyze this bank statement or financial document and extract ALL transactions — both incoming (credits) and outgoing (debits).
-
-For EACH transaction, determine the correct accounting category:
-- Money coming IN (payments received, sales, capital contributions) → use: "Sales — products", "Capital contribution", or "Returns & refunds"
-- Money going OUT (expenses, purchases) → use: "Inventory / product cost", "Marketing & ads", "Website & tech", "Legal & professional fees", "Bank fees", "Shipping (inbound)", "Shipping (outbound)", "Packaging", "Other expense", "Member distribution"
-
-IMPORTANT RULES:
-- Transfers from "La Cara LLC", "La Cara", or any parent company → "Capital contribution"
-- Shopify, Amazon, PayPal payouts → "Sales — products"  
-- Meta, Facebook, Google Ads → "Marketing & ads"
-- Shopify subscription, software → "Website & tech"
-- Bank fees, wire fees, ACH fees → "Bank fees"
-- Supplier invoices, product purchases → "Inventory / product cost"
-- Lawyer, accountant, filing fees → "Legal & professional fees"
-
-Return ONLY a JSON array (no markdown). Each item: {"date":"YYYY-MM-DD","description":"concise description","category":"exact category from list","amount":positive_number,"flow":"in" or "out","note":"reference or memo if available"}.
-
-Available categories: ${ALL_CATS.join(', ')}`
+      const systemOverride = `You are an accounting assistant for Clique Beauty Skincare LLC. Extract ALL transactions from this bank statement. Return ONLY a JSON array. Each item: {"date":"YYYY-MM-DD","description":"description","category":"one of: ${ALL_CATS.join(', ')}","amount":positive_number,"flow":"in or out","note":""}. Rules: La Cara LLC → Capital contribution. Facebook/Meta → Marketing & ads. Shopify subscription → Website & tech. Bank/wire fees → Bank fees.`
 
       const resp = await fetch('/api/analyze', {
         method: 'POST',
@@ -67,10 +133,8 @@ Available categories: ${ALL_CATS.join(', ')}`
       })
       const data = await resp.json()
       if (data.error) throw new Error(data.error)
-
-      const txs = data.transactions || []
-      const withIds = txs.map((t, i) => ({ ...t, _pid: Date.now() + i }))
-      setPending(withIds)
+      const txs = (data.transactions || []).map((t, i) => ({ ...t, _pid: Date.now() + i }))
+      setPending(txs)
     } catch (err) {
       alert('Error: ' + err.message)
     } finally {

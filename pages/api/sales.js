@@ -92,11 +92,11 @@ export default async function handler(req, res) {
 
     await supabase.from('transactions').insert([{
       date: order.date,
-      description: 'Vente ' + (order.reference || orderId.slice(0, 8)) + ' — ' + order.channel,
+      description: (order.reference || orderId.slice(0, 8)) + ' — ' + order.channel,
       category: 'Sales — products',
       type: 'revenue',
       amount: Math.round(totalAmount * 100) / 100,
-      note: order.note || null
+      note: orderId  // Store order ID for reliable sync
     }])
 
     return res.json({ success: true, order_id: orderId })
@@ -123,6 +123,11 @@ export default async function handler(req, res) {
       }
     }
 
+    // Also delete the linked transaction (keeps dashboard in sync)
+    const ref = order?.reference || id.slice(0, 8)
+    await supabase.from('transactions')
+      .delete()
+      .or('note.eq.' + id + ',description.ilike.%' + ref + '%')
     await supabase.from('sales_orders').delete().eq('id', id)
     return res.json({ success: true })
   }

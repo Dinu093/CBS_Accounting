@@ -123,11 +123,11 @@ export default function Income() {
   const doSave = async (forceInsert = false, customForm = null, customItems = null) => {
     const f = customForm || form
     const it = customItems || items
-    if (!f.date || it.some(i => !i.product_id || !i.quantity || !i.unit_price)) {
-      alert('Please fill all required fields'); return false
-    }
+    // Soft validation — filter out incomplete lines but don't block
     setSaving(true)
-    const enrichedItems = it.map(i => ({ ...i, unit_cost: products.find(p => p.id === i.product_id)?.unit_cost || 0 }))
+    const validItems = it.filter(i => i.product_id && i.quantity && i.unit_price)
+    if (!f.date) { alert('Please select a date'); return false }
+    const enrichedItems = validItems.map(i => ({ ...i, unit_cost: products.find(p => p.id === i.product_id)?.unit_cost || 0 }))
     const resp = await fetch('/api/sales', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

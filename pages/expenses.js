@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Layout from '../components/Layout'
 import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd, fdate } from '../lib/constants'
 import * as XLSX from 'xlsx'
+import DateFilter, { filterByDate } from '../components/DateFilter'
 
 export async function getServerSideProps() { return { props: {} } }
 
@@ -31,6 +32,7 @@ export default function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [dupResult, setDupResult] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
+  const [dateRange, setDateRange] = useState({ from: null, to: null })
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], description: '', category: 'Inventory / product cost', amount: '', note: '' })
   const inputRef = useRef()
 
@@ -120,7 +122,8 @@ export default function Expenses() {
     load()
   }
 
-  const totalDepenses = txs.reduce((a, t) => a + parseFloat(t.amount || 0), 0)
+  const filteredTxs = filterByDate(txs, 'date', dateRange)
+  const totalDepenses = filteredTxs.reduce((a, t) => a + parseFloat(t.amount || 0), 0)
   const totalCogs = txs.filter(t => CATEGORIES[t.category] === 'cogs').reduce((a, t) => a + parseFloat(t.amount || 0), 0)
   const totalOpex = txs.filter(t => CATEGORIES[t.category] === 'opex').reduce((a, t) => a + parseFloat(t.amount || 0), 0)
 
@@ -139,12 +142,13 @@ export default function Expenses() {
 
       {successMsg && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{successMsg}</div>}
 
+      <DateFilter onChange={setDateRange} />
       <div className="metrics-grid" style={{ marginBottom: '1.5rem' }}>
         {[
           ['Total dépenses', usd(totalDepenses), '#C62828'],
           ['Coût des ventes', usd(totalCogs), '#E65100'],
           ['Charges opex', usd(totalOpex), '#AD1457'],
-          ['Nb transactions', txs.length, '#37474F'],
+          ['Nb transactions', filteredTxs.length, '#37474F'],
         ].map(([l, v, c]) => (
           <div key={l} className="metric-card"><div className="label">{l}</div><div className="value" style={{ color: c }}>{v}</div></div>
         ))}
@@ -211,7 +215,7 @@ export default function Expenses() {
       )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {loading ? <div className="loading">Chargement…</div> : txs.length === 0 ? (
+        {loading ? <div className="loading">Chargement…</div> : filteredTxs.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36 }}>🔴</div>
             <p>Aucune dépense enregistrée</p>

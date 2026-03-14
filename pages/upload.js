@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import Layout from '../components/Layout'
-import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd, fdate } from '../lib/constants'
+import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd } from '../lib/constants'
 import * as XLSX from 'xlsx'
 
 export async function getServerSideProps() {
@@ -46,18 +46,28 @@ async function toBase64(file) {
   })
 }
 
+async function postTransactions(transactions, forceInsert = false) {
+  const resp = await fetch('/api/transactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transactions, forceInsert })
+  })
+  return resp.json()
+}
+
 export default function Upload() {
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
   const [pending, setPending] = useState([])
   const [saving, setSaving] = useState(false)
-  const [result, setResult] = useState(null) // { saved, duplicates, details }
+  const [result, setResult] = useState(null)
+  const [dupConfirm, setDupConfirm] = useState(null) // { duplicates, toInsert }
   const inputRef = useRef()
 
   const analyze = async (file) => {
     const ftype = getFileType(file)
-    if (ftype === 'unknown') { alert('Format non supporté. Utilise JPG, PNG, PDF, CSV ou XLSX.'); return }
+    if (ftype === 'unknown') { alert('Format non supporté.'); return }
     setLoading(true)
     setResult(null)
 
@@ -84,59 +94,73 @@ export default function Upload() {
       const withIds = data.transactions.map((t, i) => ({ ...t, _pid: Date.now() + i }))
       setPending(prev => [...prev, ...withIds])
     } catch (err) {
-      alert('Erreur lors de l\'analyse : ' + err.message)
+      alert('Erreur : ' + err.message)
     } finally {
       setLoading(false)
     }
   }
 
+  const handleSaveResult = (data, txList) => {
+    // If duplicates found, show confirmation dialog
+    if (data.duplicates && data.duplicates.length > 0) {
+      setDupConfirm({
+        duplicates: data.duplicates,
+        saved: data.inserted ? data.inserted.length : 0,
+        toInsert: data.duplicates.map(d => d.newTx)
+      })
+    } else {
+      setResult({
+        saved: data.inserted ? data.inserted.length : 0,
+        duplicates: [],
+        message: data.message
+      })
+    }
+  }
+
   const acceptAll = async () => {
     setSaving(true)
-    const resp = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transactions: pending.map(({ _pid, ...t }) => t) })
-    })
-    const data = await resp.json()
+    const txList = pending.map(({ _pid, ...t }) => t)
+    const data = await postTransactions(txList)
     setSaving(false)
-
-    setResult({
-      saved: data.inserted ? data.inserted.length : 0,
-      duplicates: data.duplicates || [],
-      message: data.message || ''
-    })
     setPending([])
+    handleSaveResult(data, txList)
   }
 
   const acceptOne = async (tx) => {
     const { _pid, ...t } = tx
-    const resp = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transactions: [t] })
-    })
-    const data = await resp.json()
-
-    if (data.duplicates && data.duplicates.length > 0) {
-      const dup = data.duplicates[0]
-      setResult({
-        saved: 0,
-        duplicates: [dup],
-        message: 'Doublon détecté — transaction ignorée'
-      })
-    } else {
-      setResult({
-        saved: 1,
-        duplicates: [],
-        message: '1 transaction enregistrée.'
-      })
-    }
-    setPending(prev => prev.filter(p => p._pid !== _pid))
+    const data = await postTransactions([t])
+    setPending(prev => prev.filter(p => p._pid !== tx._pid))
+    handleSaveResult(data, [t])
   }
 
   const rejectOne = (_pid) => setPending(prev => prev.filter(p => p._pid !== _pid))
+
   const updatePending = (_pid, field, value) => {
     setPending(prev => prev.map(p => p._pid === _pid ? { ...p, [field]: value } : p))
+  }
+
+  // User confirms: force insert duplicates anyway
+  const confirmAddDuplicates = async () => {
+    const toInsert = dupConfirm.toInsert
+    setSaving(true)
+    const data = await postTransactions(toInsert, true)
+    setSaving(false)
+    setDupConfirm(null)
+    setResult({
+      saved: (dupConfirm.saved || 0) + (data.inserted ? data.inserted.length : 0),
+      duplicates: [],
+      message: ((dupConfirm.saved || 0) + (data.inserted ? data.inserted.length : 0)) + ' transaction(s) enregistrée(s) au total.'
+    })
+  }
+
+  // User refuses: just show what was saved
+  const refuseDuplicates = () => {
+    setResult({
+      saved: dupConfirm.saved || 0,
+      duplicates: dupConfirm.duplicates,
+      message: ''
+    })
+    setDupConfirm(null)
   }
 
   return (
@@ -156,23 +180,65 @@ export default function Upload() {
               ✓ {result.saved} transaction{result.saved > 1 ? 's' : ''} enregistrée{result.saved > 1 ? 's' : ''} avec succès
             </div>
           )}
-          {result.duplicates.length > 0 && (
+          {result.duplicates && result.duplicates.length > 0 && (
             <div className="alert alert-warning">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                ⚠ {result.duplicates.length} doublon{result.duplicates.length > 1 ? 's' : ''} détecté{result.duplicates.length > 1 ? 's' : ''} et ignoré{result.duplicates.length > 1 ? 's' : ''}
-              </div>
+              <strong>⚠ {result.duplicates.length} doublon{result.duplicates.length > 1 ? 's' : ''} ignoré{result.duplicates.length > 1 ? 's' : ''}</strong>
               {result.duplicates.map((d, i) => (
-                <div key={i} style={{ fontSize: 12, padding: '6px 0', borderTop: i > 0 ? '1px solid #FFE0B2' : 'none' }}>
-                  <strong>{d.newTx?.description || 'Transaction'}</strong> · {d.newTx?.date} · {usd(d.newTx?.amount)}
-                  <br />
-                  <span style={{ color: '#E65100' }}>{d.reason} — déjà enregistrée le {d.existingTx?.date}</span>
+                <div key={i} style={{ fontSize: 12, marginTop: 6 }}>
+                  {d.newTx?.description} · {d.newTx?.date} · {usd(d.newTx?.amount)} — {d.reason}
                 </div>
               ))}
             </div>
           )}
-          {result.saved === 0 && result.duplicates.length === 0 && (
-            <div className="alert alert-info">ℹ {result.message}</div>
-          )}
+        </div>
+      )}
+
+      {/* Duplicate confirmation modal */}
+      {dupConfirm && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{ maxWidth: 480 }}>
+            <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ textAlign: 'center', marginBottom: 8 }}>
+              {dupConfirm.duplicates.length} doublon{dupConfirm.duplicates.length > 1 ? 's' : ''} détecté{dupConfirm.duplicates.length > 1 ? 's' : ''}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginBottom: '1.25rem' }}>
+              Ces transactions semblent déjà être enregistrées. Veux-tu les ajouter quand même ?
+            </p>
+
+            <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '0.75rem', marginBottom: '1.25rem' }}>
+              {dupConfirm.duplicates.map((d, i) => (
+                <div key={i} style={{ padding: '8px 0', borderBottom: i < dupConfirm.duplicates.length - 1 ? '1px solid var(--border)' : 'none', fontSize: 13 }}>
+                  <div style={{ fontWeight: 500 }}>{d.newTx?.description}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {d.newTx?.date} · <strong style={{ color: '#C62828' }}>{usd(d.newTx?.amount)}</strong> · {d.reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {dupConfirm.saved > 0 && (
+              <div className="alert alert-success" style={{ marginBottom: '1rem', fontSize: 12 }}>
+                ✓ {dupConfirm.saved} autre{dupConfirm.saved > 1 ? 's' : ''} transaction{dupConfirm.saved > 1 ? 's' : ''} déjà enregistrée{dupConfirm.saved > 1 ? 's' : ''} avec succès
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button
+                className="primary"
+                onClick={confirmAddDuplicates}
+                disabled={saving}
+                style={{ padding: '10px', fontSize: 13 }}
+              >
+                {saving ? 'Enregistrement…' : 'Oui, ajouter quand même'}
+              </button>
+              <button
+                onClick={refuseDuplicates}
+                style={{ padding: '10px', fontSize: 13 }}
+              >
+                Non, ignorer
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

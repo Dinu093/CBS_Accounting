@@ -196,7 +196,10 @@ export default function Income() {
     const selected = shopifyOrders.filter(o => o.selected)
     setShopifySaving(true)
     let saved = 0
+    let shippingExpenses = 0
+
     for (const order of selected) {
+      // Revenue = subtotal (products only), NOT shipping
       const orderForm = {
         date: order.date, channel: 'E-commerce', reference: order.order_id,
         payment_status: order.payment_status || 'paid',
@@ -204,21 +207,48 @@ export default function Income() {
         buyer_phone: order.buyer_phone || '',
         buyer_address: order.buyer_address, buyer_city: order.buyer_city,
         buyer_state: order.buyer_state, buyer_zip: order.buyer_zip,
-        shipping_cost: order.shipping_cost || 0,
-        shipping_charged: order.shipping_charged || false,
+        shipping_cost: parseFloat(order.shipping_cost) || 0,
+        shipping_charged: true,
         note: 'Shopify import'
       }
       const orderItems = (order.items || []).filter(i => i.product_id && i.quantity && i.unit_price)
       if (orderItems.length === 0) continue
       const enrichedItems = orderItems.map(i => ({ ...i, unit_cost: products.find(p => p.id === i.product_id)?.unit_cost || 0 }))
-      const resp = await fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: orderForm, items: enrichedItems, forceInsert: false }) })
+
+      // Override total_amount to be subtotal only (exclude shipping)
+      const resp = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: { ...orderForm, _subtotal_only: true }, items: enrichedItems, forceInsert: false })
+      })
       const data = await resp.json()
-      if (!data.duplicate && !data.error) saved++
+      if (!data.duplicate && !data.error) {
+        saved++
+        // Record shipping as outbound shipping expense
+        if (parseFloat(order.shipping_cost) > 0) {
+          await fetch('/api/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transactions: [{
+                date: order.date,
+                description: 'Shipping — ' + order.order_id + ' (' + (order.buyer_name || '') + ')',
+                category: 'Shipping (outbound)',
+                type: 'cogs',
+                amount: parseFloat(order.shipping_cost),
+                note: order.order_id
+              }],
+              forceInsert: true
+            })
+          })
+          shippingExpenses++
+        }
+      }
     }
     setShopifySaving(false)
     setShowShopify(false)
     setShopifyOrders([])
-    setSuccessMsg(saved + ' Shopify orders imported ✓')
+    setSuccessMsg(saved + ' orders imported · ' + shippingExpenses + ' shipping expense(s) recorded ✓')
     setTimeout(() => setSuccessMsg(''), 5000)
     load()
   }
@@ -338,11 +368,11 @@ export default function Income() {
                           <td style={{ fontSize: 12 }}>{o.buyer_name}<br/><span style={{ color: 'var(--text-muted)' }}>{o.buyer_city}{o.buyer_state ? ', ' + o.buyer_state : ''}</span></td>
                           <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{o.items?.map(it => (it.product_name_found || it.product_id) + ' ×' + it.quantity).join(', ')}</td>
                           <td style={{ fontSize: 12 }}>
-                            {o.shipping_charged
-                              ? <span style={{ color: 'var(--red)', fontWeight: 500 }}>{usd(o.shipping_cost)} (your cost)</span>
-                              : <span style={{ color: 'var(--text-muted)' }}>Customer paid</span>}
+                            {parseFloat(o.shipping_cost) > 0
+                              ? <span style={{ color: 'var(--red)', fontWeight: 500 }}>−{usd(o.shipping_cost)}</span>
+                              : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                           </td>
-                          <td style={{ textAlign: 'right', fontWeight: 600, fontSize: 13 }}>{usd(o.total)}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, fontSize: 13, color: 'var(--green)' }}>{usd(o.subtotal || o.total)}</td>
                         </tr>
                       ))}
                     </tbody>

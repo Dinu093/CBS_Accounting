@@ -25,8 +25,19 @@ export default function Layout({ children }) {
     <div>
       <nav className="sidebar">
         <div className="sidebar-logo">
-          <div className="company">Clique Beauty</div>
-          <div className="sub">Finance & Operations</div>
+          <img
+            src="/logo.png"
+            alt="Clique Beauty"
+            style={{ width: '100%', maxWidth: 160, height: 'auto', opacity: 0.95 }}
+          />
+          <div style={{
+            fontSize: 11,
+            color: 'rgba(255,255,255,0.32)',
+            marginTop: 10,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            fontWeight: 400
+          }}>Finance & Operations</div>
         </div>
 
         {NAV.map((section, si) => (
@@ -40,7 +51,7 @@ export default function Layout({ children }) {
                 className={'nav-item' + (router.pathname === n.href ? ' active' : '')}
                 onClick={() => router.push(n.href)}
               >
-                <span style={{ fontSize: 14, width: 18, textAlign: 'center', opacity: 0.7 }}>{n.icon}</span>
+                <span style={{ fontSize: 15, width: 20, textAlign: 'center', opacity: 0.65 }}>{n.icon}</span>
                 {n.label}
               </button>
             ))}
@@ -51,9 +62,9 @@ export default function Layout({ children }) {
           marginTop: 'auto',
           padding: '20px 24px',
           borderTop: '1px solid rgba(255,255,255,0.07)',
-          fontSize: 11,
-          color: 'rgba(255,255,255,0.22)',
-          letterSpacing: '0.04em',
+          fontSize: 10,
+          color: 'rgba(255,255,255,0.2)',
+          letterSpacing: '0.06em',
           textTransform: 'uppercase'
         }}>
           FY 2025 · v3.0

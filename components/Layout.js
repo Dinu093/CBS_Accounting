@@ -6,18 +6,18 @@ const NAV = [
   { group: null, items: [
     { href: '/', icon: '▣', label: 'Dashboard' },
   ]},
-  { group: 'Flux financiers', items: [
-    { href: '/income',   icon: '↑', label: 'Encaissements' },
-    { href: '/expenses', icon: '↓', label: 'Décaissements' },
-    { href: '/cashflow', icon: '⇄', label: 'Trésorerie AP/AR' },
+  { group: 'Finance', items: [
+    { href: '/income',   icon: '↑', label: 'Income' },
+    { href: '/expenses', icon: '↓', label: 'Expenses' },
+    { href: '/cashflow', icon: '⇄', label: 'Cash Flow AP/AR' },
   ]},
-  { group: 'Opérations', items: [
-    { href: '/inventory',    icon: '◫', label: 'Inventaire' },
+  { group: 'Operations', items: [
+    { href: '/inventory',    icon: '◫', label: 'Inventory' },
     { href: '/costs',        icon: '◈', label: 'Shipments & Imports' },
     { href: '/distribution', icon: '◎', label: 'Distribution' },
   ]},
-  { group: 'Analyse', items: [
-    { href: '/reports', icon: '▸', label: 'Rapports' },
+  { group: 'Analytics', items: [
+    { href: '/reports', icon: '▸', label: 'Reports' },
   ]},
 ]
 

@@ -295,3 +295,6 @@ export default function Distribution() {
     </Layout>
   )
 }
+
+
+export async function getServerSideProps() { return { props: {} } }

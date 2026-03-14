@@ -2,12 +2,12 @@ import { useState } from 'react'
 
 const PRESETS = [
   { label: 'Tout', value: 'all' },
-  { label: 'Aujourd\'hui', value: 'today' },
-  { label: '7 derniers jours', value: '7d' },
+  { label: "Aujourd'hui", value: 'today' },
+  { label: '7 jours', value: '7d' },
   { label: 'Ce mois', value: 'month' },
   { label: 'Mois dernier', value: 'lastmonth' },
-  { label: 'Ce trimestre', value: 'quarter' },
-  { label: 'Cette année', value: 'year' },
+  { label: 'Trimestre', value: 'quarter' },
+  { label: 'Année', value: 'year' },
   { label: 'Personnalisé', value: 'custom' },
 ]
 
@@ -54,11 +54,8 @@ export default function DateFilter({ onChange }) {
   const [showCustom, setShowCustom] = useState(false)
 
   const apply = (p, c = custom) => {
-    if (p === 'custom') {
-      onChange({ from: c.from || null, to: c.to || null })
-    } else {
-      onChange(getRange(p))
-    }
+    if (p === 'custom') onChange({ from: c.from || null, to: c.to || null })
+    else onChange(getRange(p))
   }
 
   const handlePreset = (p) => {
@@ -74,32 +71,32 @@ export default function DateFilter({ onChange }) {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: '1.25rem', padding: '10px 14px', background: 'var(--bg)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginRight: 4 }}>Période :</span>
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        {PRESETS.map(p => (
-          <button
-            key={p.value}
-            onClick={() => handlePreset(p.value)}
-            style={{
-              fontSize: 12, padding: '4px 10px',
-              background: preset === p.value ? 'var(--pink)' : 'var(--white)',
-              color: preset === p.value ? 'white' : 'var(--text-muted)',
-              borderColor: preset === p.value ? 'var(--pink)' : 'var(--border)',
-              borderRadius: 20,
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
+    <div className="date-filter-bar">
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 6 }}>Période</span>
+      {PRESETS.map(p => (
+        <button
+          key={p.value}
+          onClick={() => handlePreset(p.value)}
+          style={{
+            fontSize: 12,
+            padding: '5px 12px',
+            borderRadius: 20,
+            background: preset === p.value ? 'var(--navy)' : 'transparent',
+            color: preset === p.value ? 'white' : 'var(--text-muted)',
+            borderColor: preset === p.value ? 'var(--navy)' : 'transparent',
+            fontWeight: preset === p.value ? 500 : 400,
+          }}
+        >
+          {p.label}
+        </button>
+      ))}
       {showCustom && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4 }}>
           <input type="date" value={custom.from} onChange={e => handleCustom('from', e.target.value)}
-            style={{ fontSize: 12, padding: '4px 8px', width: 140 }} />
+            style={{ fontSize: 12, padding: '5px 10px', width: 140 }} />
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>→</span>
           <input type="date" value={custom.to} onChange={e => handleCustom('to', e.target.value)}
-            style={{ fontSize: 12, padding: '4px 8px', width: 140 }} />
+            style={{ fontSize: 12, padding: '5px 10px', width: 140 }} />
         </div>
       )}
     </div>

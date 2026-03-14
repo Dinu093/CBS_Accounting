@@ -18,54 +18,76 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { order, items } = req.body
-
     const totalAmount = items.reduce((a, i) => a + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0)
+
+    // Duplicate check: same reference + same date
+    if (order.reference) {
+      const { data: existing } = await supabase
+        .from('sales_orders')
+        .select('id, reference, date, total_amount')
+        .eq('reference', order.reference.trim())
+        .eq('date', order.date)
+
+      if (existing && existing.length > 0) {
+        return res.status(409).json({
+          error: `Doublon détecté : la facture "${order.reference}" du ${order.date} existe déjà (${new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(existing[0].total_amount)}).`,
+          duplicate: true,
+          existing: existing[0]
+        })
+      }
+    }
+
+    // Also check: same date + same total + same channel (even without reference)
+    const { data: existingAmount } = await supabase
+      .from('sales_orders')
+      .select('id, reference, date, total_amount')
+      .eq('date', order.date)
+      .eq('total_amount', Math.round(totalAmount * 100) / 100)
+      .eq('channel', order.channel)
+
+    if (existingAmount && existingAmount.length > 0) {
+      return res.status(409).json({
+        error: `Doublon probable : une vente de ${new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(totalAmount)} sur "${order.channel}" le ${order.date} existe déjà${existingAmount[0].reference ? ` (réf: ${existingAmount[0].reference})` : ''}.`,
+        duplicate: true,
+        existing: existingAmount[0]
+      })
+    }
 
     // Insert order
     const { data: ord, error: ordErr } = await supabase
       .from('sales_orders')
-      .insert([{ ...order, total_amount: totalAmount }])
+      .insert([{ ...order, total_amount: Math.round(totalAmount * 100) / 100 }])
       .select()
     if (ordErr) return res.status(500).json({ error: ordErr.message })
 
     const orderId = ord[0].id
-
-    // Process line items
     const lineItems = []
+
     for (const item of items) {
       const qty = parseFloat(item.quantity)
       const unitPrice = parseFloat(item.unit_price)
       const unitCost = parseFloat(item.unit_cost || 0)
-      const totalPrice = qty * unitPrice
-      const margin = totalPrice - (qty * unitCost)
-
       lineItems.push({
         order_id: orderId,
         product_id: item.product_id,
         quantity: qty,
         unit_price: unitPrice,
         unit_cost: unitCost,
-        total_price: Math.round(totalPrice * 100) / 100,
-        margin: Math.round(margin * 100) / 100
+        total_price: Math.round(qty * unitPrice * 100) / 100,
+        margin: Math.round((qty * unitPrice - qty * unitCost) * 100) / 100
       })
 
-      // Deduct from inventory
       const { data: prod } = await supabase
-        .from('inventory')
-        .select('quantity_on_hand')
-        .eq('id', item.product_id)
-        .single()
-
+        .from('inventory').select('quantity_on_hand').eq('id', item.product_id).single()
       if (prod) {
-        const newQty = Math.max(0, parseFloat(prod.quantity_on_hand) - qty)
-        await supabase.from('inventory').update({ quantity_on_hand: newQty }).eq('id', item.product_id)
+        await supabase.from('inventory')
+          .update({ quantity_on_hand: Math.max(0, parseFloat(prod.quantity_on_hand) - qty) })
+          .eq('id', item.product_id)
       }
     }
 
-    const { error: itemsErr } = await supabase.from('sale_items').insert(lineItems)
-    if (itemsErr) return res.status(500).json({ error: itemsErr.message })
+    await supabase.from('sale_items').insert(lineItems)
 
-    // Record revenue transaction
     await supabase.from('transactions').insert([{
       date: order.date,
       description: `Vente ${order.reference || orderId.slice(0, 8)} — ${order.channel}`,
@@ -80,20 +102,13 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     const { id } = req.query
-    // Restore inventory before deleting
     const { data: order } = await supabase
-      .from('sales_orders')
-      .select('sale_items(*)')
-      .eq('id', id)
-      .single()
+      .from('sales_orders').select('sale_items(*)').eq('id', id).single()
 
     if (order?.sale_items) {
       for (const item of order.sale_items) {
         const { data: prod } = await supabase
-          .from('inventory')
-          .select('quantity_on_hand')
-          .eq('id', item.product_id)
-          .single()
+          .from('inventory').select('quantity_on_hand').eq('id', item.product_id).single()
         if (prod) {
           await supabase.from('inventory')
             .update({ quantity_on_hand: parseFloat(prod.quantity_on_hand) + parseFloat(item.quantity) })
@@ -102,8 +117,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const { error } = await supabase.from('sales_orders').delete().eq('id', id)
-    if (error) return res.status(500).json({ error: error.message })
+    await supabase.from('sales_orders').delete().eq('id', id)
     return res.json({ success: true })
   }
 

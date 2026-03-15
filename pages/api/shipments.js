@@ -95,6 +95,17 @@ export default async function handler(req, res) {
       .eq('id', id)
       .single()
 
+    // Delete linked AP entries first
+    await supabase.from('payables').delete().eq('note', ship?.reference || id)
+    // Also delete by reference pattern
+    if (ship?.reference) {
+      const { data: apEntries } = await supabase.from('payables').select('id, note')
+      const toDelete = (apEntries || []).filter(p => p.note && p.note.includes(ship.reference))
+      for (const ap of toDelete) {
+        await supabase.from('payables').delete().eq('id', ap.id)
+      }
+    }
+
     // Delete shipment (cascade deletes shipment_items)
     const { error } = await supabase.from('shipments').delete().eq('id', id)
     if (error) return res.status(500).json({ error: error.message })

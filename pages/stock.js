@@ -176,7 +176,8 @@ export default function Stock() {
                   ['Units in stock', products.reduce((a, p) => a + (p.quantity_on_hand || 0), 0), 'var(--navy)'],
                   ['Stock IN', totalIn, 'var(--green)'],
                   ['Stock OUT', totalOut, 'var(--red)'],
-                  ['Stock value', usd(products.reduce((a, p) => a + (p.quantity_on_hand || 0) * (p.unit_cost || 0), 0)), 'var(--amber)'],
+                  ['Stock value (cost)', usd(products.reduce((a, p) => a + (p.quantity_on_hand || 0) * (p.unit_cost || 0), 0)), 'var(--amber)'],
+                  ['Stock value (MSRP)', usd(products.reduce((a, p) => a + (p.quantity_on_hand || 0) * (parseFloat(p.msrp) || 0), 0)), 'var(--green)'],
                 ].map(([l, v, c]) => (
                   <div key={l} className="metric-card"><div className="label">{l}</div><div className="value" style={{ color: c }}>{v}</div></div>
                 ))}
@@ -186,7 +187,7 @@ export default function Stock() {
                   Current stock levels
                 </div>
                 <table>
-                  <thead><tr><th>Product</th><th>SKU</th><th>Supplier</th><th style={{ textAlign: 'right' }}>In stock</th><th style={{ textAlign: 'right' }}>Reorder at</th><th style={{ textAlign: 'right' }}>Unit cost</th><th style={{ textAlign: 'right' }}>Stock value</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Product</th><th>SKU</th><th>Supplier</th><th style={{ textAlign: 'right' }}>In stock</th><th style={{ textAlign: 'right' }}>Reorder at</th><th style={{ textAlign: 'right' }}>Unit cost</th><th style={{ textAlign: 'right' }}>Value (cost)</th><th style={{ textAlign: 'right' }}>Value (MSRP)</th><th>Status</th></tr></thead>
                   <tbody>
                     {products.map(p => {
                       const isLow = p.quantity_on_hand <= (p.reorder_level || 10)
@@ -199,6 +200,7 @@ export default function Stock() {
                           <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{p.reorder_level || 10}</td>
                           <td style={{ textAlign: 'right' }}>{usd(p.unit_cost)}</td>
                           <td style={{ textAlign: 'right', fontWeight: 500 }}>{usd((p.quantity_on_hand || 0) * (p.unit_cost || 0))}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--green)' }}>{p.msrp ? usd((p.quantity_on_hand || 0) * parseFloat(p.msrp)) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>No MSRP</span>}</td>
                           <td>{isLow ? <span className="pill" style={{ background: 'var(--red-light)', color: 'var(--red)' }}>⚠ Low</span> : <span className="pill" style={{ background: 'var(--green-light)', color: 'var(--green)' }}>OK</span>}</td>
                         </tr>
                       )

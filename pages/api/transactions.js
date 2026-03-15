@@ -11,16 +11,22 @@ export default async function handler(req, res) {
     const results = []
     for (const tx of transactions) {
       if (!forceInsert) {
-        // Strict duplicate: same date + same amount + same description (exact match)
+        // Duplicate check: same date + amount + description + note (bank ref)
+        // Using note field to store bank reference for Mercury imports
         if (tx.date && tx.amount && tx.description) {
-          const { data: ex } = await supabase
+          const query = supabase
             .from('transactions')
-            .select('id, date, description, amount')
+            .select('id, date, description, amount, note')
             .eq('date', tx.date)
             .eq('amount', +tx.amount)
             .eq('description', tx.description.trim())
-          if (ex?.length > 0) {
-            results.push({ duplicate: true, tx, existing: ex[0] }); continue
+          // If we have a bank ref (note), include it in the check
+          if (tx.note) {
+            const { data: ex } = await query.eq('note', tx.note.trim())
+            if (ex?.length > 0) { results.push({ duplicate: true, tx, existing: ex[0] }); continue }
+          } else {
+            const { data: ex } = await query
+            if (ex?.length > 0) { results.push({ duplicate: true, tx, existing: ex[0] }); continue }
           }
         }
       }

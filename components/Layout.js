@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router'
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { useAuth } from '../pages/_app'
+import { useAuth } from '../lib/auth'
 
 const NAV = [
   { section: 'Dashboards', items: [

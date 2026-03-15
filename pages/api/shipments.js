@@ -87,8 +87,49 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     const { id } = req.query
+
+    // Get shipment items before deleting
+    const { data: ship } = await supabase
+      .from('shipments')
+      .select('*, shipment_items(product_id, quantity, total_unit_cost)')
+      .eq('id', id)
+      .single()
+
+    // Delete shipment (cascade deletes shipment_items)
     const { error } = await supabase.from('shipments').delete().eq('id', id)
     if (error) return res.status(500).json({ error: error.message })
+
+    // Recalculate stock for each affected product from scratch
+    if (ship?.shipment_items) {
+      const productIds = [...new Set(ship.shipment_items.map(i => i.product_id))]
+      for (const productId of productIds) {
+        // Sum all remaining shipment quantities
+        const { data: remaining } = await supabase
+          .from('shipment_items')
+          .select('quantity, total_unit_cost')
+          .eq('product_id', productId)
+        
+        // Sum all sales quantities
+        const { data: sold } = await supabase
+          .from('sale_items')
+          .select('quantity')
+          .eq('product_id', productId)
+
+        const totalIn = (remaining || []).reduce((a, i) => a + parseFloat(i.quantity || 0), 0)
+        const totalOut = (sold || []).reduce((a, i) => a + parseFloat(i.quantity || 0), 0)
+        const newStock = totalIn - totalOut
+
+        // Recalculate weighted average cost from remaining shipments
+        const totalCostQty = (remaining || []).reduce((a, i) => a + parseFloat(i.quantity || 0) * parseFloat(i.total_unit_cost || 0), 0)
+        const newCost = totalIn > 0 ? totalCostQty / totalIn : 0
+
+        await supabase.from('inventory').update({
+          quantity_on_hand: newStock,
+          unit_cost: Math.round(newCost * 100) / 100
+        }).eq('id', productId)
+      }
+    }
+
     return res.json({ success: true })
   }
 

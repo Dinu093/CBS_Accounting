@@ -88,17 +88,28 @@ export default function Sales() {
   const importShopifyCSV = async (file) => {
     setParsing(true); setSyncResult(null)
     try {
-      const text = await file.text()
+      const name = file.name.toLowerCase()
+      let csvContent = ''
+      if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        // Convert xlsx to CSV using SheetJS
+        const XLSX = (await import('xlsx')).default || (await import('xlsx'))
+        const ab = await file.arrayBuffer()
+        const wb = XLSX.read(new Uint8Array(ab), { type: 'array' })
+        csvContent = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]])
+      } else {
+        csvContent = await file.text()
+      }
       const resp = await fetch('/api/shopify-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvContent: text, products })
+        body: JSON.stringify({ csvContent, products })
       })
       const data = await resp.json()
+      if (data.error) { setSyncResult({ error: data.error }); return }
       setSyncResult(data)
       if (data.success) load()
     } catch(err) { setSyncResult({ error: err.message }) }
-    setParsing(false)
+    finally { setParsing(false) }
   }
 
   const parseInvoice = async (file) => {

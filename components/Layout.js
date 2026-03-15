@@ -17,7 +17,7 @@ const NAV_ADMIN = [
   ]},
   { group: 'Finance', items: [
     { href: '/income',   icon: '↑', label: 'Income' },
-    { href: '/expenses', icon: '↓', label: 'Expenses' },
+    { href: '/expenses', icon: '↓', label: 'Transactions' },
     { href: '/cashflow', icon: '⇄', label: 'Cash Flow AP/AR' },
     { href: '/import',   icon: '⬆', label: 'Bank Import' },
   ]},
@@ -38,7 +38,7 @@ const NAV_VIEWER = [
   ]},
   { group: 'Finance', items: [
     { href: '/income',   icon: '↑', label: 'Income' },
-    { href: '/expenses', icon: '↓', label: 'Expenses' },
+    { href: '/expenses', icon: '↓', label: 'Transactions' },
     { href: '/cashflow', icon: '⇄', label: 'Cash Flow AP/AR' },
   ]},
   { group: 'Analytics', items: [

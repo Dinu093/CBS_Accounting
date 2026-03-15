@@ -167,7 +167,7 @@ export default function Sales() {
     if (!form.date || validLines.length === 0) { alert('Fill date and at least one product'); return }
     setSaving(true)
     const items = validLines.map(l => { const p = products.find(x => x.id === l.product_id); return { product_id: l.product_id, quantity: +l.quantity, unit_price: +l.unit_price, unit_cost: +(p?.unit_cost||0) } })
-    const resp = await fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: form, items }) })
+    const resp = await fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: { ...form, source: parsedInvoice ? 'invoice' : 'manual' }, items }) })
     const data = await resp.json()
     setSaving(false)
     if (data.duplicate) {

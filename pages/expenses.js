@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx'
 
 export async function getServerSideProps() { return { props: {} } }
 
-const EXPENSE_CATS = CAT_KEYS.filter(k => CATEGORIES[k] === 'cogs' || CATEGORIES[k] === 'opex')
+const EXPENSE_CATS = [...CAT_KEYS.filter(k => CATEGORIES[k] === 'cogs' || CATEGORIES[k] === 'opex'), 'Capital contribution']
 
 export default function Expenses() {
   const { isAdmin } = useAuth()

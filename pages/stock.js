@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
+import { useAuth } from './_app'
 import { usd, fdate } from '../lib/constants'
 
 export async function getServerSideProps() { return { props: {} } }
@@ -14,6 +15,7 @@ const EMPTY_SHIPMENT = {
 }
 
 export default function Stock() {
+  const { isAdmin } = useAuth()
   const [products, setProducts] = useState([])
   const [shipments, setShipments] = useState([])
   const [sales, setSales] = useState([])
@@ -218,7 +220,7 @@ export default function Stock() {
           <p>{totalIn} units in · {totalOut} units out · {movements.length} movements</p>
         </div>
         {activeTab === 'in' && (
-          <button className="primary" onClick={() => setShowShipModal(true)}>+ New shipment</button>
+          {isAdmin && <button className="primary" onClick={() => setShowShipModal(true)}>+ New shipment</button>}
         )}
       </div>
 
@@ -288,8 +290,8 @@ export default function Stock() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ fontWeight: 600, fontSize: 18, color: 'var(--red)' }}>{usd(totalCostS)}</div>
-                        <button onClick={() => openEdit(s)} style={{ fontSize: 12, padding: '5px 10px', color: 'var(--blue-pearl)', borderColor: 'var(--blue-pearl)', background: 'var(--blue-light)' }}>Edit</button>
-                      <button onClick={() => deleteShipment(s.id)} disabled={deletingId === s.id} className="danger" style={{ fontSize: 12, padding: '5px 10px' }}>{deletingId === s.id ? '…' : 'Delete'}</button>
+                        {isAdmin && <button onClick={() => openEdit(s)} style={{ fontSize: 12, padding: '5px 10px', color: 'var(--blue-pearl)', borderColor: 'var(--blue-pearl)', background: 'var(--blue-light)' }}>Edit</button>}
+                      {isAdmin && <button onClick={() => deleteShipment(s.id)} disabled={deletingId === s.id} className="danger" style={{ fontSize: 12, padding: '5px 10px' }}>{deletingId === s.id ? '…' : 'Delete'}</button>}
                       </div>
                     </div>
 

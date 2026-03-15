@@ -15,6 +15,7 @@ function StatusChip({ dueDate, status }) {
 }
 
 export default function Cashflow() {
+  const { isAdmin } = useAuth()
   const [payables, setPayables] = useState([])
   const [receivables, setReceivables] = useState([])
   const [loading, setLoading] = useState(true)

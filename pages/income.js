@@ -224,8 +224,8 @@ export default function Income() {
       const data = await resp.json()
       if (!data.duplicate && !data.error) {
         saved++
-        // Record shipping as outbound shipping expense
-        if (parseFloat(order.shipping_cost) > 0) {
+        // Record shipping as outbound shipping expense (only if Clique Beauty paid = order >= $90)
+        if (order.shipping_charged && parseFloat(order.shipping_cost) > 0) {
           await fetch('/api/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

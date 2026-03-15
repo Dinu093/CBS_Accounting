@@ -219,8 +219,8 @@ export default function Stock() {
           <h1>Stock</h1>
           <p>{totalIn} units in · {totalOut} units out · {movements.length} movements</p>
         </div>
-        {activeTab === 'in' && (
-          {isAdmin && <button className="primary" onClick={() => setShowShipModal(true)}>+ New shipment</button>}
+        {activeTab === 'in' && isAdmin && (
+          <button className="primary" onClick={() => setShowShipModal(true)}>+ New shipment</button>
         )}
       </div>
 

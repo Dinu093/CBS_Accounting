@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
 import { usd, fdate, EXIT_TYPES } from '../lib/constants'
-import { useAuth } from './_app'
+import { useAuth } from '../lib/auth'
 
 export async function getServerSideProps() { return { props: {} } }
 

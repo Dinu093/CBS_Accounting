@@ -145,7 +145,7 @@ export default function Stock() {
     const items = validLines.map(l => ({
       product_id: l.product_id,
       quantity: parseFloat(l.quantity),
-      unit_cost: parseFloat(l.unit_cost) || 0,
+      unit_purchase_price: parseFloat(l.unit_cost) || 0,
       unit_cost_with_ancillary: lineWithCost.find(lc => lc.product_id === l.product_id)?.totalUnitCost || 0,
     }))
     const resp = await fetch('/api/shipments', {

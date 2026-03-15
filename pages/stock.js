@@ -313,7 +313,7 @@ export default function Stock() {
                       <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Prod cost/u</th><th style={{ textAlign: 'right' }}>Allocated/u</th><th style={{ textAlign: 'right' }}>Total cost/u</th></tr></thead>
                       <tbody>
                         {s.shipment_items?.map((item, i) => {
-                          const prodUnit = parseFloat(item.unit_cost || 0)
+                          const prodUnit = parseFloat(item.unit_purchase_price || item.unit_cost || 0)
                           const allocated = totalUnits > 0 ? ((parseFloat(s.freight_cost || 0) + parseFloat(s.customs_cost || 0) + parseFloat(s.packaging_cost || 0)) / totalUnits) : 0
                           const totalUnit = prodUnit + allocated
                           return (

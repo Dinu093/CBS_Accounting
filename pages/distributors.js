@@ -43,7 +43,17 @@ export default function Distributors() {
   const saveDist = async () => {
     if (!distForm.name) return
     setSaving(true)
-    const body = { ...distForm, discount_pct: +distForm.discount_pct, payment_terms_days: +distForm.payment_terms_days }
+    const body = {
+      ...distForm,
+      discount_pct: +distForm.discount_pct || 40,
+      payment_terms_days: +distForm.payment_terms_days || 30,
+      resale_certificate: distForm.resale_certificate || null,
+      resale_certificate_expiry: distForm.resale_certificate_expiry || null,
+      phone: distForm.phone || null,
+      contact_name: distForm.contact_name || null,
+      email: distForm.email || null,
+      notes: distForm.notes || null,
+    }
     if (editingDist) { body.id = editingDist; await fetch('/api/distributors', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
     else await fetch('/api/distributors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     setSaving(false); setShowDistModal(false); load()

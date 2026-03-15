@@ -312,9 +312,9 @@ export default function Income() {
                       {usd(o.total_amount)}
                       {o.shipping_charged && o.shipping_cost > 0 && <div style={{ fontSize: 10, color: 'var(--red)', fontWeight: 400 }}>+{usd(o.shipping_cost)} shipping</div>}
                     </td>
-                    <td style={{ display: 'flex', gap: 6, alignItems: 'center' }}>{isAdmin && 
-                      {status !== 'paid' && <button style={{ fontSize: 11, padding: '4px 10px', background: 'var(--green-light)', color: 'var(--green)', border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={e => { e.stopPropagation(); markPaid(o.id) }}>✓ Paid</button>}
-                      <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={e => { e.stopPropagation(); deleteOrder(o.id) }}>×</button>
+                    <td style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {isAdmin && status !== 'paid' && <button style={{ fontSize: 11, padding: '4px 10px', background: 'var(--green-light)', color: 'var(--green)', border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={e => { e.stopPropagation(); markPaid(o.id) }}>✓ Paid</button>}
+                      {isAdmin && <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={e => { e.stopPropagation(); deleteOrder(o.id) }}>×</button>}
                     </td>
                   </tr>,
                   isExpanded && (

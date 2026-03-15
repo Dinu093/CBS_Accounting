@@ -14,8 +14,9 @@ export default function Transactions() {
   const [pending, setPending] = useState([])
   const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], description: '', category: 'Marketing & ads', amount: '', note: '' })
-  const [period, setPeriod] = useState('month')
+  const [period, setPeriod] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [search, setSearch] = useState('')
   const [openMonths, setOpenMonths] = useState(new Set([new Date().toISOString().slice(0,7)]))
@@ -83,11 +84,23 @@ export default function Transactions() {
   const saveManual = async () => {
     if (!form.date||!form.description||!form.amount) return
     setSaving(true)
-    await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions:[{...form,amount:+form.amount,type:TX_CAT_MAP[form.category]||'opex'}], forceInsert:false }) })
-    setSaving(false); setShowModal(false); setForm({date:new Date().toISOString().split('T')[0],description:'',category:'Marketing & ads',amount:'',note:''}); load()
+    if (editing) {
+      await fetch('/api/transactions', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: editing, ...form, amount:+form.amount, type:TX_CAT_MAP[form.category]||'opex' }) })
+    } else {
+      await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions:[{...form,amount:+form.amount,type:TX_CAT_MAP[form.category]||'opex'}], forceInsert:false }) })
+    }
+    setSaving(false); closeModal(); load()
   }
 
-  const del = async (id) => { await fetch('/api/transactions?id='+id,{method:'DELETE'}); load() }
+  const del = async (id) => { if(!confirm('Delete?')) return; await fetch('/api/transactions?id='+id,{method:'DELETE'}); load() }
+
+  const openEdit = (tx) => {
+    setEditing(tx.id)
+    setForm({ date: tx.date, description: tx.description, category: tx.category, amount: tx.amount, note: tx.note || '' })
+    setShowModal(true)
+  }
+
+  const closeModal = () => { setShowModal(false); setEditing(null); setForm({date:new Date().toISOString().split('T')[0],description:'',category:'Marketing & ads',amount:'',note:''}) }
   const delSelected = async () => { if(!confirm('Delete '+selected.size+' transactions?'))return; for(const id of selected) await fetch('/api/transactions?id='+id,{method:'DELETE'}); setSelected(new Set()); load() }
 
   const typeColor = (cat) => { const t=TX_CAT_MAP[cat]; if(t==='revenue'||t==='capital') return 'var(--green)'; if(t==='cogs') return 'var(--amber)'; return 'var(--red)' }
@@ -214,7 +227,7 @@ export default function Transactions() {
                             <td><span className="badge" style={{background:pos?'var(--green-light)':'var(--bg-3)',color:pos?'var(--green)':'var(--text-3)',fontSize:11}}>{tx.category}</span></td>
                             <td className="td-right td-mono" style={{fontWeight:600,color:pos?'var(--green)':'var(--text)'}}>{pos?'+':'-'}{usd(tx.amount)}</td>
                             <td className="td-muted" style={{fontSize:12}}>{tx.note||'—'}</td>
-                            {isAdmin&&<td><button className="btn btn-danger btn-sm" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>del(tx.id)}>×</button></td>}
+                            {isAdmin&&<td><div style={{display:'flex',gap:4}}><button className="btn btn-outline btn-sm" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>openEdit(tx)}>Edit</button><button className="btn btn-danger btn-sm" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>del(tx.id)}>×</button></div></td>}
                           </tr>
                         )
                       })}
@@ -230,7 +243,7 @@ export default function Transactions() {
       {showModal && (
         <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setShowModal(false)}>
           <div className="modal">
-            <div className="modal-header"><h2>New transaction</h2><button className="modal-close" onClick={()=>setShowModal(false)}>×</button></div>
+            <div className="modal-header"><h2>{editing?'Edit transaction':'New transaction'}</h2><button className="modal-close" onClick={closeModal}>×</button></div>
             <div className="modal-body">
               <div className="form-row form-row-2">
                 <div className="form-group"><label className="form-label">Date *</label><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} /></div>
@@ -245,8 +258,8 @@ export default function Transactions() {
               <div className="form-group"><label className="form-label">Note / Reference</label><input type="text" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} placeholder="Invoice #…" /></div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-outline" onClick={()=>setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveManual} disabled={saving}>{saving?'Saving…':'Save'}</button>
+              <button className="btn btn-outline" onClick={closeModal}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveManual} disabled={saving}>{saving?'Saving…':editing?'Update':'Save'}</button>
             </div>
           </div>
         </div>

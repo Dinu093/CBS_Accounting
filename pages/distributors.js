@@ -75,7 +75,18 @@ export default function Distributors() {
   const saveLoc = async () => {
     if (!locForm.city && !locForm.address) return
     setSaving(true)
-    const body = { ...locForm, distributor_id: selected.id }
+    const body = {
+      distributor_id: selected.id,
+      name: locForm.name || null,
+      contact_name: locForm.contact_name || null,
+      email: locForm.email || null,
+      phone: locForm.phone || null,
+      address: locForm.address || null,
+      city: locForm.city || null,
+      state: locForm.state || null,
+      zip: locForm.zip || null,
+      is_primary: locForm.is_primary || false,
+    }
     if (editingLoc) { body.id = editingLoc; await fetch('/api/locations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
     else await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     setSaving(false); setShowLocModal(false); load()

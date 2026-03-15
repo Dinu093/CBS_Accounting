@@ -64,7 +64,7 @@ export default function Transactions() {
     try {
       const { type, content, mediaType } = await readFile(file)
       const catList = TX_CATEGORIES.map(c=>c.value).join(', ')
-      const system = `You are an accounting assistant for Clique Beauty Skincare LLC (Kentucky LLC, cash basis). This is a Mercury bank statement. Extract ONLY expense transactions. Return ONLY a JSON array. Each item: {"date":"YYYY-MM-DD","description":"vendor name","category":"one of: ${catList}","amount":positive_number,"note":"bank_reference","type":"opex or cogs or capital or distribution"}. STRICT RULES: 1) IGNORE all positive amounts (money coming IN) EXCEPT transfers clearly from "La Cara LLC" which = Capital contribution. 2) EXTRACT all negative amounts (money going OUT): Facebook/Meta → Marketing & ads, FedEx/UPS/USPS/Chronopost → Shipping (outbound), Shopify fees → Website & tech, Mercury/bank fees → Bank fees, supplier payments → Inventory / product cost, all other expenses → Other expense. 3) Put the bank reference code in "note" field. 4) DO NOT include Clique Boutique, Joseph Salon, Holiday Manor or any distributor payments — those are sales already recorded. Return ONLY valid JSON array, no markdown.`
+      const system = `You are an accounting assistant for Clique Beauty Skincare LLC (Kentucky LLC, cash basis). This is a Mercury bank statement. Extract ONLY expense transactions. Return ONLY a JSON array. Each item: {"date":"YYYY-MM-DD","description":"vendor name","category":"one of: ${catList}","amount":positive_number,"note":"bank_reference","type":"opex or cogs or capital or distribution"}. STRICT RULES: 1) IGNORE all positive amounts (money coming IN) EXCEPT transfers clearly from "La Cara LLC" which = Capital contribution. 2) EXTRACT all negative amounts (money going OUT): Facebook/Meta → Marketing & ads, FedEx/UPS/USPS/Chronopost → Shipping (outbound), Shopify fees → Website & tech, Mercury/bank fees → Bank fees, supplier payments → Inventory / product cost, all other expenses → Other expense. 3) Put the bank reference code in "note" field. 4) DO NOT include Clique Boutique, Joseph Salon, Holiday Manor or any distributor payments — those are sales already recorded. For ambiguous positive amounts (not clearly La Cara LLC, not clearly a customer payment): include them with category "REVIEW" and type "unknown" so the user can classify them manually. Return ONLY valid JSON array, no markdown.`
       const resp = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, content, mediaType, filename: file.name, systemOverride: system }) })
       const data = await resp.json()
       setPending((data.transactions||[]).map((t,i)=>({...t,_id:Date.now()+i})))
@@ -73,10 +73,28 @@ export default function Transactions() {
   }
 
   const [dupModal, setDupModal] = useState(null)
+  const [reviewModal, setReviewModal] = useState(null)
 
   const acceptAll = async (force=false) => {
+    // Separate REVIEW items from normal ones
+    const reviewItems = pending.filter(t => t.category === 'REVIEW' || t.type === 'unknown')
+    const normalItems = pending.filter(t => t.category !== 'REVIEW' && t.type !== 'unknown')
+
+    if (reviewItems.length > 0 && !force) {
+      setReviewModal(reviewItems.map(t => ({ ...t, selectedCategory: 'Capital contribution', skip: false })))
+      // Save normal items immediately
+      if (normalItems.length > 0) {
+        setSaving(true)
+        await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions: normalItems.map(({_id,...t})=>t), forceInsert: false }) })
+        setSaving(false)
+      }
+      setPending([])
+      return
+    }
+
     setSaving(true)
-    const resp = await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions: pending.map(({_id,...t})=>t), forceInsert: force }) })
+    const toSave = force ? pending : normalItems
+    const resp = await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions: toSave.map(({_id,...t})=>t), forceInsert: force }) })
     const data = await resp.json()
     setSaving(false)
     if (!force && data.duplicates?.length > 0) {
@@ -84,6 +102,22 @@ export default function Transactions() {
       return
     }
     setPending([]); setDupModal(null); load()
+  }
+
+  const confirmReview = async () => {
+    if (!reviewModal) return
+    setSaving(true)
+    const toSave = reviewModal
+      .filter(t => !t.skip)
+      .map(({ _id, skip, selectedCategory, ...t }) => ({
+        ...t,
+        category: selectedCategory,
+        type: TX_CAT_MAP[selectedCategory] || 'opex',
+      }))
+    if (toSave.length > 0) {
+      await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions: toSave, forceInsert: false }) })
+    }
+    setSaving(false); setReviewModal(null); load()
   }
 
   const saveManual = async () => {
@@ -242,6 +276,53 @@ export default function Transactions() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {reviewModal && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{maxWidth:600}}>
+            <div className="modal-header">
+              <h2>💬 Unclassified transactions</h2>
+              <button className="modal-close" onClick={()=>setReviewModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13,color:'var(--text-2)',marginBottom:16}}>
+                These incoming transactions could not be automatically classified. Choose a category for each or skip them.
+              </p>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                {reviewModal.map((tx,i)=>(
+                  <div key={i} style={{padding:'12px 14px',background:tx.skip?'var(--bg-3)':'var(--bg-2)',borderRadius:10,opacity:tx.skip?0.5:1}}>
+                    <div style={{display:'grid',gridTemplateColumns:'90px 1fr 90px',gap:8,alignItems:'center',marginBottom:8}}>
+                      <span style={{fontSize:12,color:'var(--text-3)'}}>{tx.date}</span>
+                      <span style={{fontSize:13,fontWeight:500}}>{tx.description}</span>
+                      <span style={{fontSize:13,fontWeight:600,textAlign:'right',color:'var(--green)'}}>+{usd(tx.amount)}</span>
+                    </div>
+                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                      <select
+                        value={tx.selectedCategory}
+                        onChange={e=>setReviewModal(p=>p.map((x,xi)=>xi===i?{...x,selectedCategory:e.target.value}:x))}
+                        style={{flex:1,fontSize:12}}
+                        disabled={tx.skip}
+                      >
+                        {TX_CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.value}</option>)}
+                      </select>
+                      <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,whiteSpace:'nowrap'}}>
+                        <input type="checkbox" checked={tx.skip} onChange={e=>setReviewModal(p=>p.map((x,xi)=>xi===i?{...x,skip:e.target.checked}:x))} style={{width:'auto'}} />
+                        Skip
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={()=>setReviewModal(null)}>Cancel all</button>
+              <button className="btn btn-primary" onClick={confirmReview} disabled={saving}>
+                {saving?'Saving…':`Confirm ${reviewModal.filter(t=>!t.skip).length} transaction${reviewModal.filter(t=>!t.skip).length!==1?'s':''}`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

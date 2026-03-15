@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Layout from '../components/Layout'
 import { usd, fdate, fdateShort, TX_CATEGORIES, TX_CAT_MAP } from '../lib/constants'
-import { useAuth } from './_app'
+import { useAuth } from '../lib/auth'
 import * as XLSX from 'xlsx'
 
 export async function getServerSideProps() { return { props: {} } }

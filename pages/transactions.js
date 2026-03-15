@@ -72,13 +72,18 @@ export default function Transactions() {
     setAnalyzing(false)
   }
 
+  const [dupModal, setDupModal] = useState(null)
+
   const acceptAll = async (force=false) => {
     setSaving(true)
     const resp = await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ transactions: pending.map(({_id,...t})=>t), forceInsert: force }) })
     const data = await resp.json()
     setSaving(false)
-    if (!force && data.duplicates?.length > 0) { if (confirm(data.duplicates.length+' duplicate(s) found. Save anyway?')) acceptAll(true); return }
-    setPending([]); load()
+    if (!force && data.duplicates?.length > 0) {
+      setDupModal(data.duplicates)
+      return
+    }
+    setPending([]); setDupModal(null); load()
   }
 
   const saveManual = async () => {
@@ -237,6 +242,34 @@ export default function Transactions() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {dupModal && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{maxWidth:560}}>
+            <div className="modal-header">
+              <h2>⚠ Duplicates detected</h2>
+              <button className="modal-close" onClick={()=>setDupModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:13,color:'var(--text-2)',marginBottom:16}}>The following transactions already exist in your records with the exact same date, amount and description. Do you want to add them anyway?</p>
+              <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>
+                {dupModal.map((d,i)=>(
+                  <div key={i} style={{padding:'10px 14px',background:'var(--bg-2)',borderRadius:10,display:'grid',gridTemplateColumns:'90px 1fr 100px',gap:8,alignItems:'center'}}>
+                    <span style={{fontSize:12,color:'var(--text-3)'}}>{d.tx.date}</span>
+                    <span style={{fontSize:13,fontWeight:500}}>{d.tx.description}</span>
+                    <span style={{fontSize:13,fontWeight:600,textAlign:'right',color:'var(--text)'}}>{usd(d.tx.amount)}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{fontSize:12,color:'var(--text-3)'}}>Note: identical amounts from the same vendor on different dates are <strong>not</strong> duplicates — only exact same-day same-amount same-description entries are flagged.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={()=>setDupModal(null)}>Skip duplicates</button>
+              <button className="btn btn-primary" onClick={()=>acceptAll(true)} disabled={saving}>{saving?'Saving…':'Add them anyway'}</button>
+            </div>
+          </div>
         </div>
       )}
 

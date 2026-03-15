@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { usd } from '../lib/constants'
-import 'leaflet/dist/leaflet.css'
 
 export default function MapComponent() {
   const mapRef = useRef(null)
@@ -12,6 +11,22 @@ export default function MapComponent() {
   const [geocoding, setGeocoding] = useState(false)
   const [geocodedCount, setGeocodedCount] = useState(0)
   const [filter, setFilter] = useState('all')
+
+  useEffect(() => {
+    // Load Leaflet CSS + JS from CDN
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link')
+      link.id = 'leaflet-css'
+      link.rel = 'stylesheet'
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      document.head.appendChild(link)
+    }
+    if (!window.L) {
+      const script = document.createElement('script')
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      document.head.appendChild(script)
+    }
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -28,8 +43,8 @@ export default function MapComponent() {
   useEffect(() => {
     if (loading || mapInstance.current) return
     
-    const L = require('leaflet')
-    
+    const L = window.L
+    if (!L) return
     delete L.Icon.Default.prototype._getIconUrl
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -49,7 +64,8 @@ export default function MapComponent() {
   // Update markers
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
-    const L = require('leaflet')
+    const L = window.L
+    if (!L) return
     markersLayer.current.clearLayers()
     const bounds = []
 

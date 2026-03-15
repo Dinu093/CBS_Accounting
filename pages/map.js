@@ -122,7 +122,7 @@ export default function MapPage() {
     let count = 0
 
     // Geocode e-commerce orders
-    const ordersToGeocode = orders.filter(o => !o.lat && o.buyer_address && o.buyer_city)
+    const ordersToGeocode = orders.filter(o => o.channel === 'E-commerce' && !o.lat && o.buyer_address && o.buyer_city)
     for (const order of ordersToGeocode) {
       try {
         const resp = await fetch('/api/geocode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: order.buyer_address, city: order.buyer_city, state: order.buyer_state, zip: order.buyer_zip }) })
@@ -154,7 +154,7 @@ export default function MapPage() {
     setGeocoding(false)
   }
 
-  const needsGeocode = orders.filter(o => !o.lat && o.buyer_address).length + locations.filter(l => !l.lat && l.address).length
+  const needsGeocode = orders.filter(o => o.channel === 'E-commerce' && !o.lat && o.buyer_address).length + locations.filter(l => !l.lat && l.address).length
 
   return (
     <Layout>
@@ -223,7 +223,7 @@ export default function MapPage() {
         <table>
           <thead><tr><th>Type</th><th>Name</th><th>Address</th><th>State</th><th style={{ textAlign: 'right' }}>Revenue</th><th>Mapped</th></tr></thead>
           <tbody>
-            {orders.filter(o => o.buyer_address).map(o => (
+            {orders.filter(o => o.channel === 'E-commerce' && o.buyer_address).map(o => (
               <tr key={o.id}>
                 <td><span className="pill" style={{ background: '#E8EAF6', color: '#283593', fontSize: 11 }}>E-com</span></td>
                 <td style={{ fontWeight: 500, fontSize: 13 }}>{o.buyer_name || '—'}</td>

@@ -26,7 +26,14 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { shipment, items } = req.body
+    const { shipment: rawShipment, items } = req.body
+    // Clean empty date strings to null to avoid Supabase date format errors
+    const shipment = {
+      ...rawShipment,
+      merchandise_due_date: rawShipment.merchandise_due_date || null,
+      freight_due_date: rawShipment.freight_due_date || null,
+      customs_due_date: rawShipment.customs_due_date || null,
+    }
     const totalProdCost = items.reduce((a, i) => a + +i.quantity * +i.unit_purchase_price, 0)
     const totalCost = totalProdCost + +shipment.freight_cost + +shipment.customs_cost + +shipment.packaging_cost
     const totalUnits = items.reduce((a, i) => a + +i.quantity, 0)

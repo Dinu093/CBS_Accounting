@@ -62,12 +62,13 @@ export default async function handler(req, res) {
       if (prod) await supabase.from('inventory').update({ quantity_on_hand: +prod.quantity_on_hand - +item.quantity }).eq('id', item.product_id)
     }
 
-    // Only record transaction immediately if paid — pending goes to AR, transaction created when paid
-    if (order.payment_status === 'paid') {
+    // Record transaction if paid AND not imported from invoice (invoice payments come from Mercury)
+    if (order.payment_status === 'paid' && order.source !== 'invoice') {
       const txCat = order.channel === 'Wholesale' ? 'Sales — Wholesale' : 'Sales — E-commerce'
       await supabase.from('transactions').insert([{
         date: order.date, description: (order.reference || orderId.slice(0, 8)) + ' — ' + order.channel,
         category: txCat, type: 'revenue', amount: Math.round(totalAmount * 100) / 100, note: orderId,
+        source: 'manual',
       }])
     }
 

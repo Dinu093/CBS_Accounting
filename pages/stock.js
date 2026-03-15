@@ -92,7 +92,15 @@ export default function Stock() {
     return { ...l, totalUnitCost: prodUnit + ancillaryUnit, qty }
   })
 
-  const openEdit = (s) => {
+  const openEdit = async (s) => {
+    // Pre-delete AP entries linked to this shipment reference
+    if (s.reference) {
+      const apRes = await fetch('/api/payables').then(r => r.json())
+      const linked = Array.isArray(apRes) ? apRes.filter(p => p.note && p.note.includes(s.reference)) : []
+      for (const ap of linked) {
+        await fetch('/api/payables?id=' + ap.id, { method: 'DELETE' })
+      }
+    }
     setEditingShipment(s.id)
     setShipForm({
       reference: s.reference || '',

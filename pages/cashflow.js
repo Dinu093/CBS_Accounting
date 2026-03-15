@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
+import { useAuth } from './_app'
 import { usd, fdate } from '../lib/constants'
 
 export async function getServerSideProps() { return { props: {} } }
@@ -20,6 +21,7 @@ export default function Cashflow() {
   const [activeTab, setActiveTab] = useState('overview')
   const [saving, setSaving] = useState(false)
   const [showPayModal, setShowPayModal] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
   const [showRecModal, setShowRecModal] = useState(false)
   const [payForm, setPayForm] = useState({ vendor: '', amount: '', due_date: '', note: '' })
   const [recForm, setRecForm] = useState({ customer: '', amount: '', due_date: '', note: '' })
@@ -95,8 +97,8 @@ export default function Cashflow() {
       <div className="page-header">
         <div><h1>Cash Flow AP/AR</h1><p>Accounts payable · Accounts receivable</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setShowRecModal(true)}>+ Receivable</button>
-          <button className="primary" onClick={() => setShowPayModal(true)}>+ Payable</button>
+          {isAdmin && <button onClick={() => setShowRecModal(true)}>+ Receivable</button>}
+          {isAdmin && <button className="primary" onClick={() => setShowPayModal(true)}>+ Payable</button>}
         </div>
       </div>
 
@@ -173,19 +175,61 @@ export default function Cashflow() {
                   <table>
                     <thead><tr><th>Vendor</th><th>Note</th><th>Due date</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th><th></th></tr></thead>
                     <tbody>
-                      {pendingPay.map(p => (
-                        <tr key={p.id}>
-                          <td style={{ fontWeight: 500 }}>{p.vendor}</td>
-                          <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.note || '—'}</td>
-                          <td>{p.due_date ? fdate(p.due_date) : '—'}</td>
-                          <td><StatusChip dueDate={p.due_date} status={p.status} /></td>
-                          <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--red)' }}>{usd(p.amount)}</td>
-                          <td style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => markPaid('payable', p.id)} disabled={saving} style={{ fontSize: 11, padding: '4px 10px', background: 'var(--green-light)', color: 'var(--green)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>✓ Paid</button>
-                            <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del('payable', p.id)}>×</button>
-                          </td>
-                        </tr>
-                      ))}
+                      {pendingPay.map(p => {
+                        const isExpanded = expandedId === p.id
+                        // Parse breakdown from note if it contains cost breakdown info
+                        const isMerchandise = p.note?.toLowerCase().includes('merchandise')
+                        const isFreight = p.note?.toLowerCase().includes('freight')
+                        const isCustoms = p.note?.toLowerCase().includes('customs')
+                        return [
+                          <tr key={p.id} style={{ cursor: 'pointer', background: isExpanded ? 'var(--blue-light)' : 'transparent' }} onClick={() => setExpandedId(isExpanded ? null : p.id)}>
+                            <td style={{ fontWeight: 500 }}>{p.vendor}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.note || '—'}</td>
+                            <td>{p.due_date ? fdate(p.due_date) : '—'}</td>
+                            <td><StatusChip dueDate={p.due_date} status={p.status} /></td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--red)' }}>{usd(p.amount)}</td>
+                            <td style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+                              <button onClick={() => markPaid('payable', p.id)} disabled={saving} style={{ fontSize: 11, padding: '4px 10px', background: 'var(--green-light)', color: 'var(--green)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>✓ Paid</button>
+                              <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del('payable', p.id)}>×</button>
+                            </td>
+                          </tr>,
+                          isExpanded && (
+                            <tr key={p.id + '_detail'}>
+                              <td colSpan={6} style={{ background: 'var(--blue-light)', padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--navy)', marginBottom: 10 }}>Payment breakdown</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                                  <div style={{ padding: '8px 10px', background: 'white', borderRadius: 6 }}>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Type</div>
+                                    <div style={{ fontWeight: 600 }}>{isMerchandise ? 'Merchandise' : isFreight ? 'Freight / Transport' : isCustoms ? 'Customs / Duties' : 'Payable'}</div>
+                                  </div>
+                                  <div style={{ padding: '8px 10px', background: 'white', borderRadius: 6 }}>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Amount due</div>
+                                    <div style={{ fontWeight: 600, color: 'var(--red)', fontSize: 16 }}>{usd(p.amount)}</div>
+                                  </div>
+                                  <div style={{ padding: '8px 10px', background: 'white', borderRadius: 6 }}>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Vendor</div>
+                                    <div style={{ fontWeight: 500 }}>{p.vendor}</div>
+                                  </div>
+                                  <div style={{ padding: '8px 10px', background: 'white', borderRadius: 6 }}>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Reference</div>
+                                    <div style={{ fontWeight: 500 }}>{p.note || '—'}</div>
+                                  </div>
+                                  {p.due_date && (
+                                    <div style={{ padding: '8px 10px', background: 'white', borderRadius: 6 }}>
+                                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Due date</div>
+                                      <div style={{ fontWeight: 500 }}>{fdate(p.due_date)}</div>
+                                    </div>
+                                  )}
+                                  <div style={{ padding: '8px 10px', background: 'white', borderRadius: 6 }}>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 3 }}>Created</div>
+                                    <div style={{ fontWeight: 500 }}>{p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        ]
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -229,8 +273,8 @@ export default function Cashflow() {
                           <td><StatusChip dueDate={r.due_date} status={r.status} /></td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--green)' }}>{usd(r.amount)}</td>
                           <td style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => markPaid('receivable', r.id)} disabled={saving} style={{ fontSize: 11, padding: '4px 10px', background: 'var(--green-light)', color: 'var(--green)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>✓ Collected</button>
-                            <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del('receivable', r.id)}>×</button>
+                            {isAdmin && <button onClick={() => markPaid('receivable', r.id)} disabled={saving} style={{ fontSize: 11, padding: '4px 10px', background: 'var(--green-light)', color: 'var(--green)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>✓ Collected</button>}
+                            {isAdmin && <button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del('receivable', r.id)}>×</button>}
                           </td>
                         </tr>
                       ))}

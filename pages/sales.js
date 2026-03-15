@@ -130,9 +130,19 @@ export default function Sales() {
     const resp = await fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: form, items }) })
     const data = await resp.json()
     setSaving(false)
-    if (data.duplicate) { if (confirm('Duplicate detected. Save anyway?')) { await fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: form, items, forceInsert: true }) }); } else return }
-    if (data.error && !data.duplicate) { alert('Error: ' + data.error); return }
-    setShowModal(false); setForm(EMPTY_ORDER); setLines([{ product_id: '', quantity: '', unit_price: '' }]); load()
+    if (data.duplicate) {
+      if (confirm('Duplicate detected. Save anyway?')) {
+        const r2 = await fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: form, items, forceInsert: true }) })
+        const d2 = await r2.json()
+        if (d2.error) { alert('Error: ' + d2.error); setSaving(false); return }
+      } else { setSaving(false); return }
+    } else if (data.error) { alert('Error: ' + data.error); setSaving(false); return }
+    setSaving(false)
+    setShowModal(false)
+    setParsedInvoice(null)
+    setForm(EMPTY_ORDER)
+    setLines([{ product_id: '', quantity: '', unit_price: '' }])
+    load()
   }
 
   const del = async (id) => {
@@ -275,7 +285,7 @@ export default function Sales() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={()=>{setShowModal(false);setParsedInvoice(null);setLines([{product_id:'',quantity:'',unit_price:''}])}}>Cancel</button>
-              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?'Saving…':'Create order'}</button>
+              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?'Saving…':parsedInvoice?'Record sale':'Save sale'}</button>
             </div>
           </div>
         </div>

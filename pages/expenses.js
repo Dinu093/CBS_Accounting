@@ -229,34 +229,30 @@ export default function Expenses() {
               {txs.map(tx => {
                 const type = CATEGORIES[tx.category]
                 const c = TYPE_COLORS[type] || TYPE_COLORS.opex
-                return (
-                  <tr key={tx.id} onClick={() => setExpandedTx(expandedTx === tx.id ? null : tx.id)} style={{ cursor: 'pointer' }}>
+                const isExpanded = expandedTx === tx.id
+                return [
+                  <tr key={tx.id} onClick={() => setExpandedTx(isExpanded ? null : tx.id)} style={{ cursor: 'pointer' }}>
                     <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fdate(tx.date)}</td>
                     <td style={{ maxWidth: 250 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>{tx.description}</div></td>
                     <td><span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span></td>
                     <td style={{ textAlign: 'right', fontWeight: 600, color: '#C62828', whiteSpace: 'nowrap' }}>−{usd(tx.amount)}</td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{tx.note || '—'}</td>
                     <td onClick={e => e.stopPropagation()}><button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del(tx.id)}>Delete</button></td>
-                  </tr>
-                  {expandedTx === tx.id && (
-                    <tr>
+                  </tr>,
+                  isExpanded && (
+                    <tr key={tx.id + '_exp'}>
                       <td colSpan={6} style={{ background: 'var(--cream)', padding: '14px 16px', borderBottom: '2px solid var(--border)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
                           <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Date</div><div style={{ fontSize: 13, fontWeight: 500 }}>{fdate(tx.date)}</div></div>
                           <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Amount</div><div style={{ fontSize: 18, fontWeight: 300, color: '#C62828' }}>−{usd(tx.amount)}</div></div>
                           <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Category</div><span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span></div>
                           <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Type</div><div style={{ fontSize: 13 }}>{type === 'cogs' ? 'Cost of goods' : 'Operating expense'}</div></div>
-                          {tx.note && <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Note / Reference</div><div style={{ fontSize: 13 }}>{tx.note}</div></div>}
-                          {tx.description?.includes('Shipment') && (
-                            <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: 'var(--blue-light)', borderRadius: 6, fontSize: 12, color: 'var(--navy-mid)' }}>
-                              💡 This expense was created by a shipment. See Stock → Stock IN for cost breakdown (products + freight + customs).
-                            </div>
-                          )}
+                          {tx.note && <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Note</div><div style={{ fontSize: 13 }}>{tx.note}</div></div>}
                         </div>
                       </td>
                     </tr>
-                  )}
-                )
+                  )
+                ]
               })}
             </tbody>
           </table>

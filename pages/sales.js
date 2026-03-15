@@ -19,6 +19,8 @@ export default function Sales() {
   const [lines, setLines] = useState([{ product_id: '', quantity: '', unit_price: '' }])
   const [saving, setSaving] = useState(false)
   const [parsing, setParsing] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
   const [parsedInvoice, setParsedInvoice] = useState(null)
   const fileRef = useRef()
   const [period, setPeriod] = useState('month')
@@ -70,6 +72,17 @@ export default function Sales() {
       if (form.channel === 'Wholesale' && dist && p?.msrp) price = (+p.msrp * (1 - +dist.discount_pct / 100)).toFixed(2)
       updateLine(i, 'unit_price', price)
     }
+  }
+
+  const syncShopify = async () => {
+    setSyncing(true); setSyncResult(null)
+    try {
+      const resp = await fetch('/api/shopify-sync', { method: 'POST' })
+      const data = await resp.json()
+      setSyncResult(data)
+      if (data.success) load()
+    } catch(err) { setSyncResult({ error: err.message }) }
+    setSyncing(false)
   }
 
   const parseInvoice = async (file) => {
@@ -162,6 +175,7 @@ export default function Sales() {
           ))}
           {isAdmin && <>
             <input type="file" ref={fileRef} style={{display:'none'}} accept="image/*,.pdf,.csv" onChange={e=>e.target.files[0]&&parseInvoice(e.target.files[0])} />
+            <button className="btn btn-outline" onClick={syncShopify} disabled={syncing}>{syncing?'Syncing…':'↻ Sync Shopify'}</button>
             <button className="btn btn-outline" onClick={()=>fileRef.current.click()}>{parsing?'Reading…':'⬆ Upload invoice'}</button>
             <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New order</button>
           </>}

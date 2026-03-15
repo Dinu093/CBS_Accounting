@@ -10,6 +10,7 @@ export async function getServerSideProps() { return { props: {} } }
 const EXPENSE_CATS = CAT_KEYS.filter(k => CATEGORIES[k] === 'cogs' || CATEGORIES[k] === 'opex')
 
 export default function Expenses() {
+  const { isAdmin } = useAuth()
   const [txs, setTxs] = useState([])
   const [shipments, setShipments] = useState([])
   const [loading, setLoading] = useState(true)

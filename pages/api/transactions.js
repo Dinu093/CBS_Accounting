@@ -10,9 +10,19 @@ export default async function handler(req, res) {
     const { transactions, forceInsert } = req.body
     const results = []
     for (const tx of transactions) {
-      if (!forceInsert && tx.description) {
-        const { data: ex } = await supabase.from('transactions').select('id').eq('date', tx.date).eq('amount', +tx.amount).eq('description', tx.description)
-        if (ex?.length > 0) { results.push({ duplicate: true, tx }); continue }
+      if (!forceInsert) {
+        // Strict duplicate: same date + same amount + same description (exact match)
+        if (tx.date && tx.amount && tx.description) {
+          const { data: ex } = await supabase
+            .from('transactions')
+            .select('id, date, description, amount')
+            .eq('date', tx.date)
+            .eq('amount', +tx.amount)
+            .eq('description', tx.description.trim())
+          if (ex?.length > 0) {
+            results.push({ duplicate: true, tx, existing: ex[0] }); continue
+          }
+        }
       }
       const { data, error } = await supabase.from('transactions').insert([tx]).select()
       if (error) results.push({ error: error.message, tx })

@@ -17,6 +17,8 @@ export default function Finance() {
       fetch('/api/sales').then(r=>r.json()),
     ]).then(([t,o]) => { setTxs(Array.isArray(t)?t:[]); setOrders(Array.isArray(o)?o:[]); setLoading(false) })
   }, [])
+  // Revenue comes from sales_orders (source of truth), not transactions
+  // Expenses (cogs, opex) come from transactions
   useEffect(() => { load() }, [load])
 
   const getRange = () => {
@@ -30,7 +32,9 @@ export default function Finance() {
   const fTxs = txs.filter(t => (!from||t.date>=from) && (!to||t.date<=to))
 
   const sum = (types) => fTxs.filter(t=>types.includes(TX_CAT_MAP[t.category])).reduce((a,t)=>a+ +t.amount,0)
-  const rev = sum(['revenue'])
+  // Revenue = sum of all sales_orders in period (source of truth)
+  const fyOrders = orders.filter(o => (!from||o.date>=from) && (!to||o.date<=to))
+  const rev = fyOrders.reduce((a,o)=>a+ +o.total_amount,0)
   const cap = sum(['capital'])
   const cogs = fTxs.filter(t=>TX_CAT_MAP[t.category]==='cogs').reduce((a,t)=>a+ +t.amount,0)
   const opex = fTxs.filter(t=>TX_CAT_MAP[t.category]==='opex').reduce((a,t)=>a+ +t.amount,0)

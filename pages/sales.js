@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Layout from '../components/Layout'
 import { usd, fdate, fdateShort, initials } from '../lib/constants'
 import { useAuth } from '../lib/auth'
@@ -18,6 +18,9 @@ export default function Sales() {
   const [form, setForm] = useState(EMPTY_ORDER)
   const [lines, setLines] = useState([{ product_id: '', quantity: '', unit_price: '' }])
   const [saving, setSaving] = useState(false)
+  const [parsing, setParsing] = useState(false)
+  const [parsedInvoice, setParsedInvoice] = useState(null)
+  const fileRef = useRef()
   const [period, setPeriod] = useState('month')
   const [search, setSearch] = useState('')
 
@@ -66,6 +69,53 @@ export default function Sales() {
     updateLine(i, 'unit_price', price)
   }
 
+  const parseInvoice = async (file) => {
+    setParsing(true)
+    try {
+      const readFile = (f) => new Promise((res, rej) => {
+        const name = f.name.toLowerCase()
+        if (name.endsWith('.csv')) {
+          const r = new FileReader(); r.onload = () => res({ type: 'text', content: r.result }); r.onerror = rej; r.readAsText(f)
+        } else {
+          const r = new FileReader(); r.onload = () => res({ type: f.type.startsWith('image/') ? 'image' : 'pdf', content: r.result.split(',')[1], mediaType: f.type }); r.onerror = rej; r.readAsDataURL(f)
+        }
+      })
+      const { type, content: fileContent, mediaType } = await readFile(file)
+      const resp = await fetch('/api/parse-invoice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, content: fileContent, mediaType, products, distributors }) })
+      const data = await resp.json()
+      if (data.error) { alert('Error: ' + data.error); return }
+      const inv = data.invoice
+      // Pre-fill form
+      setForm(prev => ({
+        ...prev,
+        date: inv.date || prev.date,
+        reference: inv.reference || '',
+        channel: inv.channel || 'E-commerce',
+        distributor_id: inv.distributor_id || '',
+        payment_status: inv.payment_status || 'paid',
+        buyer_name: inv.buyer_name || '',
+        buyer_email: inv.buyer_email || '',
+        buyer_address: inv.buyer_address || '',
+        buyer_city: inv.buyer_city || '',
+        buyer_state: inv.buyer_state || '',
+        buyer_zip: inv.buyer_zip || '',
+        shipping_cost: inv.shipping_cost || '',
+        notes: inv.notes || '',
+      }))
+      if (inv.items?.length > 0) {
+        setLines(inv.items.map(i => ({
+          product_id: i.product_id || '',
+          quantity: i.quantity || '',
+          unit_price: i.unit_price || '',
+          _name_found: i.product_name_found
+        })))
+      }
+      setParsedInvoice(inv)
+      setShowModal(true)
+    } catch(err) { alert('Error: ' + err.message) }
+    finally { setParsing(false) }
+  }
+
   const totalAmount = lines.reduce((a, l) => a + +(l.quantity||0) * +(l.unit_price||0), 0)
   const cogs = lines.reduce((a, l) => { const p = products.find(x => x.id === l.product_id); return a + +(l.quantity||0) * +(p?.unit_cost||0) }, 0)
 
@@ -97,7 +147,11 @@ export default function Sales() {
           {['month','quarter','year','all'].map(p => (
             <button key={p} className={`btn ${period===p?'btn-primary':'btn-outline'} btn-sm`} onClick={() => setPeriod(p)}>{p.charAt(0).toUpperCase()+p.slice(1)}</button>
           ))}
-          {isAdmin && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New order</button>}
+          {isAdmin && <>
+            <input type="file" ref={fileRef} style={{display:'none'}} accept="image/*,.pdf,.csv" onChange={e=>e.target.files[0]&&parseInvoice(e.target.files[0])} />
+            <button className="btn btn-outline" onClick={()=>fileRef.current.click()}>{parsing?'Reading…':'⬆ Upload invoice'}</button>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New order</button>
+          </>}
         </div>
       </div>
 
@@ -152,7 +206,15 @@ export default function Sales() {
       {showModal && (
         <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setShowModal(false)}>
           <div className="modal" style={{maxWidth:600}}>
-            <div className="modal-header"><h2>New order</h2><button className="modal-close" onClick={()=>setShowModal(false)}>×</button></div>
+            <div className="modal-header">
+              <h2>{parsedInvoice ? '📄 Invoice imported — review & confirm' : 'New order'}</h2>
+              <button className="modal-close" onClick={()=>{setShowModal(false);setParsedInvoice(null)}}>×</button>
+            </div>
+            {parsedInvoice && (
+              <div style={{margin:'0 24px',padding:'10px 14px',background:'var(--blue-light)',borderRadius:8,fontSize:13,color:'var(--blue)'}}>
+                Invoice detected: <strong>{parsedInvoice.reference || 'no ref'}</strong> · {parsedInvoice.buyer_name} · Review fields below and confirm.
+              </div>
+            )}
             <div className="modal-body">
               <div className="form-row form-row-3">
                 <div className="form-group"><label className="form-label">Date *</label><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} /></div>
@@ -207,7 +269,7 @@ export default function Sales() {
               )}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-outline" onClick={()=>setShowModal(false)}>Cancel</button>
+              <button className="btn btn-outline" onClick={()=>{setShowModal(false);setParsedInvoice(null);setLines([{product_id:'',quantity:'',unit_price:''}])}}>Cancel</button>
               <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?'Saving…':'Create order'}</button>
             </div>
           </div>

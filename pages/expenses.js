@@ -21,6 +21,7 @@ export default function Expenses() {
   const [dateRange, setDateRange] = useState({ from: null, to: null })
   const [expandedTx, setExpandedTx] = useState(null)
   const [selected, setSelected] = useState(new Set())
+  const [openMonths, setOpenMonths] = useState(new Set([new Date().toISOString().slice(0, 7)]))
   const [filterCat, setFilterCat] = useState('all')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -226,27 +227,76 @@ export default function Expenses() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {loading ? <div className="loading">Loading…</div> : filteredTxs.length === 0 ? (
-          <div className="empty-state"><div style={{ fontSize: 36 }}>🔴</div><p>No expenses recorded</p></div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 36 }}>
-                  <input type="checkbox" checked={selected.size === filteredTxs.length && filteredTxs.length > 0} onChange={toggleAll} style={{ width: 'auto' }} />
-                </th>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
-                <th>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTxs.map(tx => {
+      {/* Monthly folders */}
+      {loading ? <div className="loading">Loading…</div> : filteredTxs.length === 0 ? (
+        <div className="card"><div className="empty-state"><div style={{ fontSize: 36 }}>🔴</div><p>No expenses recorded</p></div></div>
+      ) : (
+        <>
+        {(() => {
+          // Group by month
+          const groups = {}
+          filteredTxs.forEach(tx => {
+            const month = tx.date?.slice(0, 7) || 'Unknown'
+            if (!groups[month]) groups[month] = []
+            groups[month].push(tx)
+          })
+          const sortedMonths = Object.keys(groups).sort().reverse()
+
+          return sortedMonths.map(month => {
+            const monthTxs = groups[month]
+            const monthTotal = monthTxs.reduce((a, t) => a + parseFloat(t.amount || 0), 0)
+            const monthLabel = new Date(month + '-01').toLocaleString('en', { month: 'long', year: 'numeric' })
+            const isOpen = openMonths.has(month)
+
+            return (
+              <div key={month} className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '0.75rem' }}>
+                {/* Month header */}
+                <div
+                  onClick={() => {
+                    const s = new Set(openMonths)
+                    s.has(month) ? s.delete(month) : s.add(month)
+                    setOpenMonths(s)
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', cursor: 'pointer', background: isOpen ? 'var(--navy)' : 'var(--white)', borderBottom: isOpen ? '1px solid rgba(255,255,255,0.1)' : 'none', transition: 'background 0.15s' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 16, color: isOpen ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isOpen ? 'white' : 'var(--navy)' }}>{monthLabel}</div>
+                      <div style={{ fontSize: 11, color: isOpen ? 'rgba(255,255,255,0.45)' : 'var(--text-muted)', marginTop: 1 }}>{monthTxs.length} transaction{monthTxs.length > 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: isOpen ? '#E88080' : 'var(--red)' }}>−{usd(monthTotal)}</div>
+                  </div>
+                </div>
+
+                {/* Transactions */}
+                {isOpen && (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 36 }}>
+                          <input type="checkbox"
+                            checked={monthTxs.every(t => selected.has(t.id))}
+                            onChange={() => {
+                              const s = new Set(selected)
+                              if (monthTxs.every(t => s.has(t.id))) monthTxs.forEach(t => s.delete(t.id))
+                              else monthTxs.forEach(t => s.add(t.id))
+                              setSelected(s)
+                            }}
+                            style={{ width: 'auto' }} />
+                        </th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                        <th>Note</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                    {monthTxs.map(tx => {
                 const type = CATEGORIES[tx.category]
                 const c = TYPE_COLORS[type] || TYPE_COLORS.opex
                 const isExpanded = expandedTx === tx.id
@@ -323,10 +373,15 @@ export default function Expenses() {
                   )
                 ]
               })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })
+        })()}
+        </>
+      )}
 
       {/* Footer count */}
       {filteredTxs.length > 0 && (

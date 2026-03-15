@@ -18,7 +18,8 @@ export default async function handler(req, res) {
 
 CRITICAL RULES:
 - Revenue = Subtotal column ONLY (product prices, excluding shipping and taxes)
-- Shipping = the Shipping column value — this is an EXPENSE (outbound shipping cost paid by Clique Beauty)
+- Shipping logic: if Subtotal >= 90, Clique Beauty pays shipping (free shipping threshold) → shipping_cost = Shipping column value, shipping_charged = true
+- If Subtotal < 90, customer paid shipping → shipping_cost = 0, shipping_charged = false (not Clique Beauty's expense)
 - Taxes are NOT revenue and NOT expense — ignore them
 - One order = one record even if multiple line items
 
@@ -34,7 +35,8 @@ Return ONLY a JSON array (no markdown). Each order:
   "buyer_zip": "Shipping Zip (remove leading apostrophe if present)",
   "items": [{"product_id": "match from list or null", "product_name_found": "Lineitem name", "quantity": number, "unit_price": number}],
   "subtotal": number (Subtotal column — PRODUCTS ONLY),
-  "shipping_cost": number (Shipping column — will be recorded as outbound shipping expense),
+  "shipping_cost": number (Shipping column value IF subtotal >= 90, else 0),
+  "shipping_charged": boolean (true if subtotal >= 90 meaning Clique Beauty paid shipping, false otherwise),
   "total": number (Total column),
   "payment_status": "paid" or "pending" based on Financial Status,
   "financial_status": "paid/pending/etc"

@@ -30,6 +30,7 @@ export default function Expenses() {
   const [saving, setSaving] = useState(false)
   const [pending, setPending] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [expandedTx, setExpandedTx] = useState(null)
   const [dupResult, setDupResult] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
   const [dateRange, setDateRange] = useState({ from: null, to: null })
@@ -130,13 +131,13 @@ export default function Expenses() {
   return (
     <Layout>
       <div className="page-header">
-        <div><h1>Décaissements</h1><p>Charges & dépenses · Total {usd(totalDepenses)}</p></div>
+        <div><h1>Expenses</h1><p>Charges & expenses · Total {usd(totalDepenses)}</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }} onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
           <button onClick={() => !analyzing && inputRef.current.click()}>
-            {analyzing ? '⏳ ' + analyzeMsg : '⬆ Analyser un document'}
+            {analyzing ? '⏳ ' + analyzeMsg : '⬆ Upload document'}
           </button>
-          <button className="primary" onClick={() => setShowModal(true)}>+ Saisir manuellement</button>
+          <button className="primary" onClick={() => setShowModal(true)}>+ Add manually</button>
         </div>
       </div>
 
@@ -184,8 +185,8 @@ export default function Expenses() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div style={{ fontWeight: 600 }}>{pending.length} dépense{pending.length > 1 ? 's' : ''} extraite{pending.length > 1 ? 's' : ''} — à valider</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="primary" onClick={() => acceptAll(false)} disabled={saving}>{saving ? 'Enregistrement…' : 'Tout accepter (' + pending.length + ')'}</button>
-              <button onClick={() => setPending([])}>Tout rejeter</button>
+              <button className="primary" onClick={() => acceptAll(false)} disabled={saving}>{saving ? 'Enregistrement…' : 'Accept all (' + pending.length + ')'}</button>
+              <button onClick={() => setPending([])}>Reject all</button>
             </div>
           </div>
           {pending.map(tx => {
@@ -218,25 +219,43 @@ export default function Expenses() {
         {loading ? <div className="loading">Chargement…</div> : filteredTxs.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36 }}>🔴</div>
-            <p>Aucune dépense enregistrée</p>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Upload une facture fournisseur ou un relevé bancaire</p>
+            <p>No expenses recorded</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Upload a supplier invoice or bank statement</p>
           </div>
         ) : (
           <table>
-            <thead><tr><th>Date</th><th>Description</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>Montant</th><th>Note</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th style={{ textAlign: 'right' }}>Amount</th><th>Note</th><th></th></tr></thead>
             <tbody>
               {txs.map(tx => {
                 const type = CATEGORIES[tx.category]
                 const c = TYPE_COLORS[type] || TYPE_COLORS.opex
                 return (
-                  <tr key={tx.id}>
+                  <tr key={tx.id} onClick={() => setExpandedTx(expandedTx === tx.id ? null : tx.id)} style={{ cursor: 'pointer' }}>
                     <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fdate(tx.date)}</td>
-                    <td style={{ maxWidth: 250 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description}</div></td>
+                    <td style={{ maxWidth: 250 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>{tx.description}</div></td>
                     <td><span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span></td>
                     <td style={{ textAlign: 'right', fontWeight: 600, color: '#C62828', whiteSpace: 'nowrap' }}>−{usd(tx.amount)}</td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{tx.note || '—'}</td>
-                    <td><button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del(tx.id)}>Suppr.</button></td>
+                    <td onClick={e => e.stopPropagation()}><button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del(tx.id)}>Delete</button></td>
                   </tr>
+                  {expandedTx === tx.id && (
+                    <tr key={tx.id + '_exp'}>
+                      <td colSpan={6} style={{ background: 'var(--cream)', padding: '14px 16px', borderBottom: '2px solid var(--border)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Date</div><div style={{ fontSize: 13, fontWeight: 500 }}>{fdate(tx.date)}</div></div>
+                          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Amount</div><div style={{ fontSize: 18, fontWeight: 300, color: '#C62828' }}>−{usd(tx.amount)}</div></div>
+                          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Category</div><span className="pill" style={{ background: c.bg, color: c.text }}>{tx.category}</span></div>
+                          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Type</div><div style={{ fontSize: 13 }}>{type === 'cogs' ? 'Cost of goods' : 'Operating expense'}</div></div>
+                          {tx.note && <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Note / Reference</div><div style={{ fontSize: 13 }}>{tx.note}</div></div>}
+                          {tx.description?.includes('Shipment') && (
+                            <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: 'var(--blue-light)', borderRadius: 6, fontSize: 12, color: 'var(--navy-mid)' }}>
+                              💡 This expense was created by a shipment. See Stock → Stock IN for cost breakdown (products + freight + customs).
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 )
               })}
             </tbody>
@@ -247,7 +266,7 @@ export default function Expenses() {
       {showModal && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div className="modal">
-            <h2>Nouvelle dépense</h2>
+            <h2>New expense</h2>
             <div className="form-row">
               <div className="form-group"><label>Date</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
               <div className="form-group"><label>Montant ($)</label><input type="number" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>

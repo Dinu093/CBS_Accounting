@@ -62,12 +62,14 @@ export default async function handler(req, res) {
       if (prod) await supabase.from('inventory').update({ quantity_on_hand: +prod.quantity_on_hand - +item.quantity }).eq('id', item.product_id)
     }
 
-    // Record transaction
-    const txCat = order.channel === 'Wholesale' ? 'Sales — Wholesale' : 'Sales — E-commerce'
-    await supabase.from('transactions').insert([{
-      date: order.date, description: (order.reference || orderId.slice(0, 8)) + ' — ' + order.channel,
-      category: txCat, type: 'revenue', amount: Math.round(totalAmount * 100) / 100, note: orderId,
-    }])
+    // Only record transaction immediately if paid — pending goes to AR, transaction created when paid
+    if (order.payment_status === 'paid') {
+      const txCat = order.channel === 'Wholesale' ? 'Sales — Wholesale' : 'Sales — E-commerce'
+      await supabase.from('transactions').insert([{
+        date: order.date, description: (order.reference || orderId.slice(0, 8)) + ' — ' + order.channel,
+        category: txCat, type: 'revenue', amount: Math.round(totalAmount * 100) / 100, note: orderId,
+      }])
+    }
 
     // Create AR if unpaid wholesale
     if (order.payment_status === 'pending' && +totalAmount > 0) {

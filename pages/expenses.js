@@ -203,10 +203,10 @@ export default function Expenses() {
           ))}
         </div>
 
-        {selected.size > 0 && (
-          {isAdmin && <button onClick={delSelected} className="danger" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 14px' }}>
+        {selected.size > 0 && isAdmin && (
+          <button onClick={delSelected} className="danger" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 14px' }}>
             🗑 Delete {selected.size} selected
-          </button>}
+          </button>
         )}
       </div>
 

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState, createContext, useContext } from 'react'
 import { useRouter } from 'next/router'
 
-const PUBLIC_PAGES = ['/login']
+const PUBLIC_PAGES = ['/login', '/reset-password']
 
 export const AuthContext = createContext({ role: null, user: null })
 export function useAuth() { return useContext(AuthContext) }

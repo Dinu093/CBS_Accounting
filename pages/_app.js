@@ -17,30 +17,35 @@ export default function App({ Component, pageProps }) {
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        if (!PUBLIC_PAGES.includes(router.pathname)) router.replace('/login')
-        else setChecked(true)
-        return
-      }
-      const u = session.user
-      setUser(u)
-      setRole(u.user_metadata?.role || 'viewer')
-      setChecked(true)
-    }
-    init()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') { setUser(null); setRole(null); router.replace('/login') }
-      if (event === 'SIGNED_IN' && session) { setUser(session.user); setRole(session.user.user_metadata?.role || 'viewer'); setChecked(true) }
-    })
-    return () => subscription.unsubscribe()
-  }, [router.pathname])
 
-  if (!checked && !PUBLIC_PAGES.includes(router.pathname)) {
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          setChecked(true)
+          if (!PUBLIC_PAGES.includes(router.pathname)) {
+            router.replace('/login')
+          }
+          return
+        }
+        const u = session.user
+        setUser(u)
+        setRole(u.user_metadata?.role || 'viewer')
+        setChecked(true)
+      } catch (err) {
+        console.error('Auth error:', err)
+        setChecked(true)
+        router.replace('/login')
+      }
+    }
+
+    init()
+  }, []) // Run once on mount only
+
+  if (!checked) {
     return (
       <div style={{ minHeight:'100vh', background:'#111827', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'system-ui', color:'rgba(255,255,255,0.4)', fontSize:14 }}>
-        Checking access…
+        Loading…
       </div>
     )
   }

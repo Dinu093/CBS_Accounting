@@ -19,7 +19,7 @@
   --bg: #fff;
   --bg-2: #fafafa;
   --bg-3: #f5f5f5;
-  --sidebar-w: 200px;
+  --sidebar-w: 220px;
   --radius: 8px;
   --radius-lg: 12px;
 }
@@ -33,16 +33,16 @@ html, body { height: 100%; font-family: -apple-system, 'Inter', 'Segoe UI', sans
 .page { padding: 28px 32px; flex: 1; }
 
 /* Sidebar */
-.sb-logo { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); }
+.sb-logo { padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
 .sb-logo-name { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
 .sb-logo-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-.sb-section { font-size: 10px; color: var(--text-3); padding: 14px 16px 4px; letter-spacing: 0.08em; text-transform: uppercase; }
-.sb-item { display: flex; align-items: center; gap: 9px; padding: 7px 16px; font-size: 13px; color: var(--text-2); cursor: pointer; border: none; background: none; width: 100%; text-align: left; border-right: 2px solid transparent; transition: background 0.1s; }
+.sb-section { font-size: 10px; color: var(--text-3); padding: 14px 18px 4px; letter-spacing: 0.08em; text-transform: uppercase; }
+.sb-item { display: flex; align-items: center; gap: 10px; padding: 8px 18px; font-size: 13px; color: var(--text-2); cursor: pointer; border: none; background: none; width: 100%; text-align: left; border-right: 2px solid transparent; transition: background 0.1s; }
 .sb-item:hover { background: var(--bg-2); color: var(--text); }
 .sb-item.active { color: var(--text); font-weight: 500; background: var(--bg-2); border-right-color: var(--text); }
 .sb-item svg { flex-shrink: 0; opacity: 0.5; }
 .sb-item.active svg { opacity: 1; }
-.sb-bottom { margin-top: auto; padding: 14px 16px; border-top: 1px solid var(--border); }
+.sb-bottom { margin-top: auto; padding: 14px 18px; border-top: 1px solid var(--border); }
 .sb-user { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-role { font-size: 11px; color: var(--text-3); margin-top: 3px; display: flex; align-items: center; gap: 5px; }
 .sb-role-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }

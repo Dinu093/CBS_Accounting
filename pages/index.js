@@ -31,17 +31,62 @@ function getRange(p) {
   }
 }
 
-function SparkBar({ data, color = 'var(--navy)', height = 60 }) {
-  if (!data || data.length === 0) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No data</div>
-  const max = Math.max(...data.map(d => d.v), 1)
+function MoneyChart({ inData, outData, height = 160 }) {
+  const [hovered, setHovered] = React.useState(null)
+  if (!inData || inData.length === 0) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No data</div>
+  
+  const allVals = [...inData.map(d => d.v), ...outData.map(d => d.v)]
+  const max = Math.max(...allVals, 1)
+  const barH = height - 40
+  
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height }}>
-      {data.map((d, i) => (
-        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 2 }}>
-          <div style={{ width: '100%', height: Math.max(3, (d.v / max) * (height - 16)), background: color, borderRadius: '3px 3px 0 0', opacity: d.dim ? 0.35 : 1 }} title={d.label + ': ' + usd(d.v)} />
-          {data.length <= 7 && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{d.label}</div>}
+    <div style={{ position: 'relative' }}>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--green)' }} />
+          <span style={{ color: 'var(--text-muted)' }}>Money in</span>
+          <span style={{ fontWeight: 600, color: 'var(--green)', marginLeft: 4 }}>{usd(inData.reduce((a, d) => a + d.v, 0))}</span>
         </div>
-      ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--red)' }} />
+          <span style={{ color: 'var(--text-muted)' }}>Money out</span>
+          <span style={{ fontWeight: 600, color: 'var(--red)', marginLeft: 4 }}>{usd(outData.reduce((a, d) => a + d.v, 0))}</span>
+        </div>
+      </div>
+
+      {/* Bars */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: barH, position: 'relative' }}
+        onMouseLeave={() => setHovered(null)}>
+        {inData.map((d, i) => {
+          const inH = Math.max(2, (d.v / max) * (barH - 4))
+          const outH = Math.max(2, ((outData[i]?.v || 0) / max) * (barH - 4))
+          const isHov = hovered === i
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 1, cursor: 'pointer' }}
+              onMouseEnter={() => setHovered(i)}>
+              {isHov && (
+                <div style={{ position: 'absolute', top: 0, background: 'var(--navy)', color: 'white', padding: '5px 10px', borderRadius: 6, fontSize: 11, zIndex: 10, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+                  <div style={{ color: '#7BC89A' }}>↑ {usd(d.v)}</div>
+                  <div style={{ color: '#E88080' }}>↓ {usd(outData[i]?.v || 0)}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10 }}>{d.label}</div>
+                </div>
+              )}
+              <div style={{ width: '100%', display: 'flex', gap: 1, justifyContent: 'center', alignItems: 'flex-end', height: '100%' }}>
+                <div style={{ width: '45%', height: inH, background: isHov ? '#1A8A4A' : 'var(--green)', borderRadius: '3px 3px 0 0', opacity: d.v === 0 ? 0.2 : 1, transition: 'background 0.1s' }} />
+                <div style={{ width: '45%', height: outH, background: isHov ? '#C62828' : 'var(--red)', borderRadius: '3px 3px 0 0', opacity: (outData[i]?.v || 0) === 0 ? 0.2 : 1, transition: 'background 0.1s' }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* X axis labels */}
+      <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+        {inData.map((d, i) => (
+          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 9.5, color: hovered === i ? 'var(--navy)' : 'var(--text-muted)', fontWeight: hovered === i ? 600 : 400 }}>{d.label}</div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -101,19 +146,23 @@ export default function OperationsDashboard() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('month')
 
+  const [txs, setTxs] = React.useState([])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, o, d, t] = await Promise.all([
+      const [p, o, d, t, tx] = await Promise.all([
         fetch('/api/inventory?t=' + Date.now()).then(r => r.json()),
         fetch('/api/sales?t=' + Date.now()).then(r => r.json()),
         fetch('/api/distributors?t=' + Date.now()).then(r => r.json()),
         fetch('/api/gifted?targets=1&t=' + Date.now()).then(r => r.json()),
+        fetch('/api/transactions?t=' + Date.now()).then(r => r.json()),
       ])
       setProducts(Array.isArray(p) ? p : [])
       setOrders(Array.isArray(o) ? o : [])
       setDistributors(Array.isArray(d) ? d : [])
       setTargets(Array.isArray(t) ? t : [])
+      setTxs(Array.isArray(tx) ? tx : [])
     } finally { setLoading(false) }
   }, [])
 
@@ -129,26 +178,30 @@ export default function OperationsDashboard() {
   const avgOrder = totalOrders > 0 ? totalRev / totalOrders : 0
   const lowStock = products.filter(p => p.quantity_on_hand <= (p.reorder_level || 10))
 
-  // Daily sales sparkline
-  const dailyMap = {}
+  // Build in/out chart data by day or month
+  const inMap = {}, outMap = {}
   filtered.forEach(o => {
-    const d = o.date?.slice(0, 10); if (!d) return
-    dailyMap[d] = (dailyMap[d] || 0) + +o.total_amount
+    const key = (period === 'year' || period === 'all') ? o.date?.slice(0, 7) : o.date?.slice(0, 10)
+    if (!key) return
+    inMap[key] = (inMap[key] || 0) + +o.total_amount
   })
-  const dailyData = Object.entries(dailyMap).sort().map(([k, v]) => ({ label: k.slice(5), v }))
-
-  // Monthly sparkline (for year/all)
-  const monthlyMap = {}
-  orders.forEach(o => {
-    const m = o.date?.slice(0, 7); if (!m) return
-    monthlyMap[m] = (monthlyMap[m] || 0) + +o.total_amount
+  // Expenses filtered by same period
+  const filteredTxs = txs.filter(t => {
+    const type = t.category === 'Inventory / product cost' || ['Marketing & ads','Website & tech','Legal & professional fees','Bank fees','Shipping (inbound)','Shipping (outbound)','Packaging','Other expense'].includes(t.category)
+    if (!type) return false
+    return (!from || t.date >= from) && (!to || t.date <= to)
   })
-  const monthlyData = Object.entries(monthlyMap).sort().slice(-12).map(([k, v]) => ({
-    label: new Date(k + '-01').toLocaleString('en', { month: 'short' }),
-    v
-  }))
+  filteredTxs.forEach(t => {
+    const key = (period === 'year' || period === 'all') ? t.date?.slice(0, 7) : t.date?.slice(0, 10)
+    if (!key) return
+    outMap[key] = (outMap[key] || 0) + +t.amount
+  })
 
-  const chartData = (period === 'year' || period === 'all') ? monthlyData : dailyData
+  // Merge keys
+  const allKeys = [...new Set([...Object.keys(inMap), ...Object.keys(outMap)])].sort()
+  const chartData = allKeys.map(k => ({ label: (period === 'year' || period === 'all') ? new Date(k + '-01').toLocaleString('en', { month: 'short' }) : k.slice(5), v: inMap[k] || 0 }))
+  const chartOutData = allKeys.map(k => ({ label: (period === 'year' || period === 'all') ? new Date(k + '-01').toLocaleString('en', { month: 'short' }) : k.slice(5), v: outMap[k] || 0 }))
+  const totalOut = filteredTxs.reduce((a, t) => a + +t.amount, 0)
 
   // Product sales
   const productSales = {}
@@ -209,13 +262,13 @@ export default function OperationsDashboard() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
-            {/* Revenue chart */}
+            {/* Money In / Money Out chart */}
             <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>Revenue — {PERIODS.find(p => p.value === period)?.label}</div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{usd(totalRev)} total</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div className="section-title" style={{ marginBottom: 0 }}>Cash flow — {PERIODS.find(p => p.value === period)?.label}</div>
+                <span style={{ fontSize: 11, color: (totalRev - totalOut) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 500 }}>Net {usd(totalRev - totalOut)}</span>
               </div>
-              <SparkBar data={chartData} color="var(--navy)" height={120} />
+              <MoneyChart inData={chartData} outData={chartOutData} height={180} />
             </div>
 
             {/* Channel donut */}

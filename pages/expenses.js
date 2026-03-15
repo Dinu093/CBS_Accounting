@@ -40,7 +40,7 @@ export default function Expenses() {
     ]).then(([t, s]) => {
       setShipments(Array.isArray(s) ? s : [])
       const allTxs = Array.isArray(t) ? t : []
-      setTxs(allTxs.filter(tx => CATEGORIES[tx.category] === 'cogs' || CATEGORIES[tx.category] === 'opex'))
+      setTxs(allTxs.filter(tx => CATEGORIES[tx.category] === 'cogs' || CATEGORIES[tx.category] === 'opex' || CATEGORIES[tx.category] === 'capital'))
       setLoading(false)
     })
   }
@@ -143,7 +143,7 @@ export default function Expenses() {
   return (
     <Layout>
       <div className="page-header">
-        <div><h1>Expenses</h1><p>Charges & expenses · Total {usd(totalExp)}</p></div>
+        <div><h1>Transactions</h1><p>Bank transactions · Total {usd(totalExp)}</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }} onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
           {isAdmin && <button onClick={() => !analyzing && inputRef.current.click()}>{analyzing ? '⏳ ' + analyzeMsg : '⬆ Upload document'}</button>}

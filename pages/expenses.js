@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Layout from '../components/Layout'
+import { useAuth } from './_app'
 import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd, fdate } from '../lib/constants'
 import DateFilter, { filterByDate } from '../components/DateFilter'
 import * as XLSX from 'xlsx'
@@ -143,8 +144,8 @@ export default function Expenses() {
         <div><h1>Expenses</h1><p>Charges & expenses · Total {usd(totalExp)}</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={inputRef} type="file" accept="image/*,.pdf,.csv,.xlsx" style={{ display: 'none' }} onChange={e => e.target.files[0] && analyzeFile(e.target.files[0])} />
-          <button onClick={() => !analyzing && inputRef.current.click()}>{analyzing ? '⏳ ' + analyzeMsg : '⬆ Upload document'}</button>
-          <button className="primary" onClick={() => setShowModal(true)}>+ Add manually</button>
+          {isAdmin && <button onClick={() => !analyzing && inputRef.current.click()}>{analyzing ? '⏳ ' + analyzeMsg : '⬆ Upload document'}</button>}
+          {isAdmin && <button className="primary" onClick={() => setShowModal(true)}>+ Add manually</button>}
         </div>
       </div>
 
@@ -203,9 +204,9 @@ export default function Expenses() {
         </div>
 
         {selected.size > 0 && (
-          <button onClick={delSelected} className="danger" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 14px' }}>
+          {isAdmin && <button onClick={delSelected} className="danger" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 14px' }}>
             🗑 Delete {selected.size} selected
-          </button>
+          </button>}
         )}
       </div>
 
@@ -259,7 +260,7 @@ export default function Expenses() {
                     <td style={{ textAlign: 'right', fontWeight: 600, color: '#C62828', whiteSpace: 'nowrap' }}>−{usd(tx.amount)}</td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{tx.note || '—'}</td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button onClick={() => del(tx.id)} style={{ fontSize: 11, padding: '4px 10px', background: 'var(--red-light)', color: 'var(--red)', border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>× Delete</button>
+                      {isAdmin && <button onClick={() => del(tx.id)} style={{ fontSize: 11, padding: '4px 10px', background: 'var(--red-light)', color: 'var(--red)', border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>× Delete</button>}
                     </td>
                   </tr>,
                   isExpanded && (

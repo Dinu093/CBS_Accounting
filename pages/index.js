@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
 import { usd } from '../lib/constants'
 
@@ -32,7 +32,7 @@ function getRange(p) {
 }
 
 function MoneyChart({ inData, outData, height = 160 }) {
-  const [hovered, setHovered] = React.useState(null)
+  const [hovered, setHovered] = useState(null)
   if (!inData || inData.length === 0) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No data</div>
   
   const allVals = [...inData.map(d => d.v), ...outData.map(d => d.v)]
@@ -146,7 +146,7 @@ export default function OperationsDashboard() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('month')
 
-  const [txs, setTxs] = React.useState([])
+  const [txs, setTxs] = useState([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -265,7 +265,7 @@ export default function OperationsDashboard() {
             {/* Money In / Money Out chart */}
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>Cash flow — {PERIODS.find(p => p.value === period)?.label}</div>
+                <div className="section-title" style={{ marginBottom: 0 }}>Cash flow — {PERIODS.find(per => per.value === period)?.label}</div>
                 <span style={{ fontSize: 11, color: (totalRev - totalOut) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 500 }}>Net {usd(totalRev - totalOut)}</span>
               </div>
               <MoneyChart inData={chartData} outData={chartOutData} height={180} />

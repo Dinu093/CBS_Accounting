@@ -129,11 +129,12 @@ export default async function handler(req, res) {
     }
 
     // Revenue transaction
-    await supabase.from('transactions').insert([{
+    const { error: txErr } = await supabase.from('transactions').insert([{
       date: orderDate, description: 'Shopify — ' + reference,
       category: 'Sales — E-commerce', type: 'revenue',
       amount: subtotal, note: orderId, source: 'shopify',
     }])
+    if (txErr) errors.push({ reference, error: 'Transaction: ' + txErr.message })
 
     // Shipping expense if Clique pays — create placeholder if amount unknown
     if (cliquePaysShipping) {
@@ -145,7 +146,7 @@ export default async function handler(req, res) {
         amount: shippingAmt > 0 ? shippingAmt : 0,
         note: shippingAmt > 0 ? orderId : 'TO COMPLETE — enter real shipping cost for ' + reference,
         source: 'shopify',
-      }])
+      }]).then(({ error }) => { if (error) errors.push({ reference, error: 'Shipping tx: ' + error.message }) })
     }
 
     inserted++

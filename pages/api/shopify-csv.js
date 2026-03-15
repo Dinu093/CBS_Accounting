@@ -123,12 +123,16 @@ export default async function handler(req, res) {
       amount: subtotal, note: orderId, source: 'shopify',
     }])
 
-    // Shipping expense if Clique pays
-    if (cliquePaysShipping && shippingAmt > 0) {
+    // Shipping expense if Clique pays — create placeholder if amount unknown
+    if (cliquePaysShipping) {
       await supabase.from('transactions').insert([{
-        date: orderDate, description: 'Shipping — ' + reference,
-        category: 'Shipping (outbound)', type: 'cogs',
-        amount: shippingAmt, note: orderId, source: 'shopify',
+        date: orderDate,
+        description: 'Shipping — ' + reference,
+        category: 'Shipping (outbound)',
+        type: 'cogs',
+        amount: shippingAmt > 0 ? shippingAmt : 0,
+        note: shippingAmt > 0 ? orderId : 'TO COMPLETE — enter real shipping cost for ' + reference,
+        source: 'shopify',
       }])
     }
 

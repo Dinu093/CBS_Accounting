@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import Layout from '../components/Layout'
+import { useAuth } from './_app'
 import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd } from '../lib/constants'
 import * as XLSX from 'xlsx'
 

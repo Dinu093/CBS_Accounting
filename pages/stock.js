@@ -24,6 +24,7 @@ export default function Stock() {
   const [shipForm, setShipForm] = useState(EMPTY_SHIPMENT)
   const [shipLines, setShipLines] = useState([{ product_id: '', quantity: '', unit_cost: '' }])
   const [deletingId, setDeletingId] = useState(null)
+  const [editingShipment, setEditingShipment] = useState(null)
 
   const load = () => {
     setLoading(true)
@@ -91,6 +92,28 @@ export default function Stock() {
     return { ...l, totalUnitCost: prodUnit + ancillaryUnit, qty }
   })
 
+  const openEdit = (s) => {
+    setEditingShipment(s.id)
+    setShipForm({
+      reference: s.reference || '',
+      date: s.date || new Date().toISOString().split('T')[0],
+      supplier: s.supplier || '',
+      note: s.note || '',
+      freight_cost: s.freight_cost || '',
+      customs_cost: s.customs_cost || '',
+      packaging_cost: s.packaging_cost || '',
+      prod_paid: false, prod_due: '',
+      freight_paid: !!s.freight_cost, freight_due: '',
+      customs_paid: true, customs_due: '',
+    })
+    setShipLines((s.shipment_items || []).map(i => ({
+      product_id: i.product_id || '',
+      quantity: i.quantity?.toString() || '',
+      unit_cost: i.unit_purchase_price?.toString() || i.unit_cost?.toString() || '',
+    })))
+    setShowShipModal(true)
+  }
+
   const addLine = () => setShipLines([...shipLines, { product_id: '', quantity: '', unit_cost: '' }])
   const removeLine = i => setShipLines(shipLines.filter((_, xi) => xi !== i))
   const updateLine = (i, f, v) => setShipLines(shipLines.map((l, xi) => xi === i ? { ...l, [f]: v } : l))
@@ -103,6 +126,11 @@ export default function Stock() {
   }
 
   const saveShipment = async () => {
+    if (editingShipment) {
+      // Delete old shipment first, then re-create
+      await fetch('/api/shipments?id=' + editingShipment, { method: 'DELETE' })
+      setEditingShipment(null)
+    }
     const validLines = shipLines.filter(l => l.product_id && l.quantity)
     if (!shipForm.date || validLines.length === 0) { alert('Please fill date and at least one product'); return }
     setSaving(true)
@@ -153,6 +181,7 @@ export default function Stock() {
     }
     setSaving(false)
     setShowShipModal(false)
+    setEditingShipment(null)
     setShipForm(EMPTY_SHIPMENT)
     setShipLines([{ product_id: '', quantity: '', unit_cost: '' }])
     load()
@@ -251,7 +280,8 @@ export default function Stock() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ fontWeight: 600, fontSize: 18, color: 'var(--red)' }}>{usd(totalCostS)}</div>
-                        <button onClick={() => deleteShipment(s.id)} disabled={deletingId === s.id} className="danger" style={{ fontSize: 12, padding: '5px 10px' }}>{deletingId === s.id ? '…' : 'Delete'}</button>
+                        <button onClick={() => openEdit(s)} style={{ fontSize: 12, padding: '5px 10px', color: 'var(--blue-pearl)', borderColor: 'var(--blue-pearl)', background: 'var(--blue-light)' }}>Edit</button>
+                      <button onClick={() => deleteShipment(s.id)} disabled={deletingId === s.id} className="danger" style={{ fontSize: 12, padding: '5px 10px' }}>{deletingId === s.id ? '…' : 'Delete'}</button>
                       </div>
                     </div>
 
@@ -349,7 +379,7 @@ export default function Stock() {
       {showShipModal && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowShipModal(false)}>
           <div className="modal" style={{ maxWidth: 760 }}>
-            <h2>New shipment</h2>
+            <h2>{editingShipment ? 'Edit shipment' : 'New shipment'}</h2>
 
             {/* Header fields */}
             <div className="form-row">
@@ -448,8 +478,8 @@ export default function Stock() {
             )}
 
             <div className="form-actions">
-              <button className="primary" onClick={saveShipment} disabled={saving}>{saving ? 'Saving…' : 'Save shipment'}</button>
-              <button onClick={() => { setShowShipModal(false); setShipForm(EMPTY_SHIPMENT); setShipLines([{ product_id: '', quantity: '', unit_cost: '' }]) }}>Cancel</button>
+              <button className="primary" onClick={saveShipment} disabled={saving}>{saving ? 'Saving…' : editingShipment ? 'Update shipment' : 'Save shipment'}</button>
+              <button onClick={() => { setShowShipModal(false); setEditingShipment(null); setShipForm(EMPTY_SHIPMENT); setShipLines([{ product_id: '', quantity: '', unit_cost: '' }]) }}>Cancel</button>
             </div>
           </div>
         </div>

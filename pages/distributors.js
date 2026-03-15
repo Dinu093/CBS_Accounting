@@ -73,7 +73,7 @@ export default function Distributors() {
   }
 
   const saveLoc = async () => {
-    if (!locForm.city && !locForm.address) return
+    if (!locForm.city && !locForm.address && !locForm.name) { alert('Please fill at least a name, city or address'); return }
     setSaving(true)
     const body = {
       distributor_id: selected.id,
@@ -87,9 +87,16 @@ export default function Distributors() {
       zip: locForm.zip || null,
       is_primary: locForm.is_primary || false,
     }
-    if (editingLoc) { body.id = editingLoc; await fetch('/api/locations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
-    else await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    setSaving(false); setShowLocModal(false); load()
+    const url = editingLoc ? '/api/locations' : '/api/locations'
+    const method = editingLoc ? 'PUT' : 'POST'
+    if (editingLoc) body.id = editingLoc
+    const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await resp.json()
+    setSaving(false)
+    if (data.error) { alert('Error: ' + data.error); return }
+    setShowLocModal(false)
+    setLocForm(EMPTY_LOC)
+    load()
   }
 
   const delLoc = async (id) => {

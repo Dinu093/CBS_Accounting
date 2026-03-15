@@ -6,7 +6,11 @@ export async function getServerSideProps() { return { props: {} } }
 
 const EMPTY_SHIPMENT = {
   reference: '', date: new Date().toISOString().split('T')[0],
-  supplier: '', freight_cost: '', customs_cost: '', packaging_cost: '', note: ''
+  supplier: '', freight_cost: '', customs_cost: '', packaging_cost: '', note: '',
+  // Payment status per cost type
+  prod_paid: false, prod_due: '',
+  freight_paid: false, freight_due: '',
+  customs_paid: true, customs_due: '',  // customs usually paid at import
 }
 
 export default function Stock() {
@@ -127,8 +131,27 @@ export default function Stock() {
       })
     })
     const data = await resp.json()
+    if (data.error) { setSaving(false); alert('Error: ' + data.error); return }
+
+    // Create AP entries for unpaid costs
+    const ref = shipForm.reference || data.shipment_id?.slice(0, 8)
+    const apEntries = []
+    if (!shipForm.prod_paid && totalProdCost > 0) {
+      apEntries.push({ vendor: shipForm.supplier || 'Supplier', amount: totalProdCost, due_date: shipForm.prod_due || null, note: 'Merchandise — ' + ref, status: 'pending' })
+    }
+    if (!shipForm.freight_paid && freight > 0) {
+      apEntries.push({ vendor: 'Freight / Transport', amount: freight, due_date: shipForm.freight_due || null, note: 'Freight — ' + ref, status: 'pending' })
+    }
+    if (!shipForm.customs_paid && customs > 0) {
+      apEntries.push({ vendor: 'Customs / Duties', amount: customs, due_date: shipForm.customs_due || null, note: 'Customs — ' + ref, status: 'pending' })
+    }
+    for (const entry of apEntries) {
+      await fetch('/api/payables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })
+    }
+    if (apEntries.length > 0) {
+      alert(apEntries.length + ' AP entr' + (apEntries.length > 1 ? 'ies' : 'y') + ' created in Cash Flow AP/AR')
+    }
     setSaving(false)
-    if (data.error) { alert('Error: ' + data.error); return }
     setShowShipModal(false)
     setShipForm(EMPTY_SHIPMENT)
     setShipLines([{ product_id: '', quantity: '', unit_cost: '' }])
@@ -346,6 +369,31 @@ export default function Stock() {
                 <div className="form-group" style={{ marginBottom: 0 }}><label>Customs / tariffs ($)</label><input type="number" placeholder="0.00" value={shipForm.customs_cost} onChange={e => setShipForm({ ...shipForm, customs_cost: e.target.value })} /></div>
                 <div className="form-group" style={{ marginBottom: 0 }}><label>Packaging ($)</label><input type="number" placeholder="0.00" value={shipForm.packaging_cost} onChange={e => setShipForm({ ...shipForm, packaging_cost: e.target.value })} /></div>
               </div>
+            </div>
+
+            {/* Payment status per cost */}
+            <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '1rem 0 8px', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>Payment status</div>
+            <div style={{ background: 'var(--cream)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                ['Merchandise', 'prod_paid', 'prod_due', totalProdCost],
+                ['Freight / Transport', 'freight_paid', 'freight_due', freight],
+                ['Customs / Duties', 'customs_paid', 'customs_due', customs],
+              ].filter(([, , , v]) => v > 0).map(([label, paidKey, dueKey, amount]) => (
+                <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'center' }}>
+                  <div style={{ fontSize: 13 }}><span style={{ fontWeight: 500 }}>{label}</span> <span style={{ color: 'var(--text-muted)' }}>{usd(amount)}</span></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" checked={shipForm[paidKey]} onChange={e => setShipForm({ ...shipForm, [paidKey]: e.target.checked })} style={{ width: 'auto' }} />
+                    <label style={{ fontSize: 12, cursor: 'pointer', marginBottom: 0, textTransform: 'none', letterSpacing: 0 }}>Already paid</label>
+                  </div>
+                  {!shipForm[paidKey] && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Due date:</span>
+                      <input type="date" value={shipForm[dueKey]} onChange={e => setShipForm({ ...shipForm, [dueKey]: e.target.value })} style={{ fontSize: 12, padding: '4px 8px', width: 140 }} />
+                    </div>
+                  )}
+                  {shipForm[paidKey] && <span style={{ fontSize: 11, color: 'var(--green)' }}>✓ Paid</span>}
+                </div>
+              ))}
             </div>
 
             {/* Product lines */}

@@ -60,13 +60,16 @@ export default function Sales() {
   const grossMargin = totalRev > 0 ? ((totalRev - totalCOGS) / totalRev * 100) : 0
 
   const updateLine = (i, f, v) => setLines(prev => prev.map((l, xi) => xi === i ? { ...l, [f]: v } : l))
-  const onProductSelect = (i, pid) => {
+  const onProductSelect = (i, pid, fromInvoice = false) => {
     const p = products.find(x => x.id === pid)
     const dist = distributors.find(d => d.id === form.distributor_id)
-    let price = p?.msrp || ''
-    if (form.channel === 'Wholesale' && dist && p?.msrp) price = (+p.msrp * (1 - +dist.discount_pct / 100)).toFixed(2)
     updateLine(i, 'product_id', pid)
-    updateLine(i, 'unit_price', price)
+    // Only auto-calculate price for manual orders, not imported invoices
+    if (!fromInvoice) {
+      let price = p?.msrp || ''
+      if (form.channel === 'Wholesale' && dist && p?.msrp) price = (+p.msrp * (1 - +dist.discount_pct / 100)).toFixed(2)
+      updateLine(i, 'unit_price', price)
+    }
   }
 
   const parseInvoice = async (file) => {
@@ -249,7 +252,7 @@ export default function Sales() {
               {lines.map((l,i)=>(
                 <div key={i} style={{display:'grid',gridTemplateColumns:'1fr 80px 110px 28px',gap:8,marginBottom:8,alignItems:'end'}}>
                   <div><label className="form-label" style={{display:i===0?'block':'none'}}>Product</label>
-                    <select value={l.product_id} onChange={e=>onProductSelect(i,e.target.value)}>
+                    <select value={l.product_id} onChange={e=>onProductSelect(i,e.target.value,!!parsedInvoice)}>
                       <option value="">Select…</option>
                       {products.map(p=><option key={p.id} value={p.id}>{p.product_name} (stock: {p.quantity_on_hand})</option>)}
                     </select>

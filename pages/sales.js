@@ -251,11 +251,13 @@ export default function Sales() {
               <div style={{fontSize:11,fontWeight:500,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>Products</div>
               {lines.map((l,i)=>(
                 <div key={i} style={{display:'grid',gridTemplateColumns:'1fr 80px 110px 28px',gap:8,marginBottom:8,alignItems:'end'}}>
-                  <div><label className="form-label" style={{display:i===0?'block':'none'}}>Product</label>
+                  <div>
+                    <label className="form-label" style={{display:i===0?'block':'none'}}>Product</label>
                     <select value={l.product_id} onChange={e=>onProductSelect(i,e.target.value,!!parsedInvoice)}>
-                      <option value="">Select…</option>
+                      <option value="">{l._name_found ? `Match "${l._name_found}"…` : 'Select…'}</option>
                       {products.map(p=><option key={p.id} value={p.id}>{p.product_name} (stock: {p.quantity_on_hand})</option>)}
                     </select>
+                    {l._name_found && !l.product_id && <div style={{fontSize:11,color:'var(--amber)',marginTop:3}}>⚠ Found on invoice: "{l._name_found}" — please match above</div>}
                   </div>
                   <div><label className="form-label" style={{display:i===0?'block':'none'}}>Qty</label><input type="number" value={l.quantity} onChange={e=>updateLine(i,'quantity',e.target.value)} /></div>
                   <div><label className="form-label" style={{display:i===0?'block':'none'}}>Unit price ($)</label><input type="number" value={l.unit_price} onChange={e=>updateLine(i,'unit_price',e.target.value)} /></div>

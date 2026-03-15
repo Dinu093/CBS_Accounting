@@ -29,8 +29,12 @@ export default function App({ Component, pageProps }) {
           return
         }
         const u = session.user
+        console.log('user_metadata:', u.user_metadata)
+        console.log('app_metadata:', u.app_metadata)
+        // Check both metadata locations
+        const userRole = u.user_metadata?.role || u.app_metadata?.role || 'viewer'
         setUser(u)
-        setRole(u.user_metadata?.role || 'viewer')
+        setRole(userRole)
         setChecked(true)
       } catch (err) {
         console.error('Auth error:', err)

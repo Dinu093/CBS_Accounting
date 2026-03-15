@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { data, error } = await supabase
       .from('shipments')
-      .select(`*, shipment_items(*, inventory(product_name, sku))`)
+      .select(`*, shipment_items(*, inventory(product_name, sku, unit_cost))`)
       .order('date', { ascending: false })
     if (error) return res.status(500).json({ error: error.message })
     return res.json(data)

@@ -114,7 +114,19 @@ export default async function handler(req, res) {
         margin: matched ? (item.price - (matched.unit_cost || 0)) * item.quantity : 0,
       }
     })
-    if (lineItems.length > 0) await supabase.from('sale_items').insert(lineItems)
+    if (lineItems.length > 0) {
+      await supabase.from('sale_items').insert(lineItems)
+      // Deduct stock for matched products
+      for (const item of lineItems) {
+        if (!item.product_id) continue
+        const { data: prod } = await supabase.from('inventory').select('quantity_on_hand').eq('id', item.product_id).single()
+        if (prod) {
+          await supabase.from('inventory').update({
+            quantity_on_hand: +prod.quantity_on_hand - +item.quantity
+          }).eq('id', item.product_id)
+        }
+      }
+    }
 
     // Revenue transaction
     await supabase.from('transactions').insert([{

@@ -81,17 +81,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Record as transaction
-    const totalValue = lineItems.reduce((a, i) => a + (i.quantity * i.unit_purchase_price), 0)
-    await supabase.from('transactions').insert([{
-      date: shipment.date,
-      description: `Shipment ${shipment.reference} — ${items.length} produit(s)`,
-      category: 'Inventory / product cost',
-      type: 'cogs',
-      amount: totalValue + totalExtra,
-      note: shipment.supplier || null
-    }])
-
+    // No auto-transaction — payments are recorded via bank import
     return res.json({ success: true, shipment_id: shipId })
   }
 

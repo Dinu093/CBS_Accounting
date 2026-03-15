@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
+import { useAuth } from './_app'
 import { usd } from '../lib/constants'
 
 export async function getServerSideProps() { return { props: {} } }

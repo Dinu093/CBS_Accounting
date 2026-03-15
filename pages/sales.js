@@ -85,6 +85,22 @@ export default function Sales() {
     setSyncing(false)
   }
 
+  const importShopifyCSV = async (file) => {
+    setParsing(true); setSyncResult(null)
+    try {
+      const text = await file.text()
+      const resp = await fetch('/api/shopify-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvContent: text, products })
+      })
+      const data = await resp.json()
+      setSyncResult(data)
+      if (data.success) load()
+    } catch(err) { setSyncResult({ error: err.message }) }
+    setParsing(false)
+  }
+
   const parseInvoice = async (file) => {
     setParsing(true)
     try {
@@ -174,9 +190,19 @@ export default function Sales() {
             <button key={p} className={`btn ${period===p?'btn-primary':'btn-outline'} btn-sm`} onClick={() => setPeriod(p)}>{p.charAt(0).toUpperCase()+p.slice(1)}</button>
           ))}
           {isAdmin && <>
-            <input type="file" ref={fileRef} style={{display:'none'}} accept="image/*,.pdf,.csv" onChange={e=>e.target.files[0]&&parseInvoice(e.target.files[0])} />
+            <input type="file" ref={fileRef} style={{display:'none'}} accept="image/*,.pdf,.csv" onChange={e=>{
+              const f=e.target.files[0]; if(!f) return
+              const name=f.name.toLowerCase()
+              // Shopify export CSVs have 'orders' in the name or we detect by columns
+              if(name.includes('order') && name.endsWith('.csv')) importShopifyCSV(f)
+              else parseInvoice(f)
+            }} />
             <button className="btn btn-outline" onClick={syncShopify} disabled={syncing}>{syncing?'Syncing…':'↻ Sync Shopify'}</button>
             <button className="btn btn-outline" onClick={()=>fileRef.current.click()}>{parsing?'Reading…':'⬆ Upload invoice'}</button>
+            <label style={{cursor:'pointer'}}>
+              <input type="file" accept=".csv" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f)importShopifyCSV(f)}} />
+              <span className="btn btn-outline" style={{display:'inline-flex',alignItems:'center'}}>{parsing?'Importing…':'📦 Import Shopify CSV'}</span>
+            </label>
             <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New order</button>
           </>}
         </div>

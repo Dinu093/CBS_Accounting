@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Layout from '../components/Layout'
 import { CATEGORIES, CAT_KEYS, TYPE_COLORS, usd, fdate } from '../lib/constants'
 import * as XLSX from 'xlsx'
@@ -239,7 +239,7 @@ export default function Expenses() {
                     <td onClick={e => e.stopPropagation()}><button className="danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => del(tx.id)}>Delete</button></td>
                   </tr>
                   {expandedTx === tx.id && (
-                    <tr key={tx.id + '_exp'}>
+                    <tr>
                       <td colSpan={6} style={{ background: 'var(--cream)', padding: '14px 16px', borderBottom: '2px solid var(--border)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
                           <div><div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Date</div><div style={{ fontSize: 13, fontWeight: 500 }}>{fdate(tx.date)}</div></div>

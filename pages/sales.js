@@ -244,7 +244,11 @@ export default function Sales() {
                           <td style={{ fontSize: 12 }}>{o.buyer_name || '—'}{o.buyer_email ? <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{o.buyer_email}</div> : null}</td>
                           <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.buyer_city ? o.buyer_city + (o.buyer_state ? ', ' + o.buyer_state : '') : '—'}</td>
                           <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.sale_items?.map(i => i.inventory?.product_name + ' ×' + i.quantity).join(', ')}</td>
-                          <td>{o.shipping_charged ? <span className="pill" style={{ background: 'var(--red-light)', color: 'var(--red)', fontSize: 11 }}>{usd(o.shipping_cost)} your cost</span> : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Customer paid</span>}</td>
+                          <td>
+                            {o.shipping_charged && parseFloat(o.shipping_cost) > 0
+                              ? <span className="pill" style={{ background: 'var(--red-light)', color: 'var(--red)', fontSize: 11 }}>{usd(o.shipping_cost)} your cost</span>
+                              : <span className="pill" style={{ background: 'var(--green-light)', color: 'var(--green)', fontSize: 11 }}>$0.00 your cost</span>}
+                          </td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: '#6A1B9A' }}>{usd(o.total_amount)}</td>
                         </tr>
                       ))}

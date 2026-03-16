@@ -92,7 +92,7 @@ export default function Layout({ children }) {
   const SidebarInner = () => (
     <>
       <div className="sb-logo">
-        <img src="/Logo Principal_01_blanc.png" alt="Clique Beauty" style={{width:'100%',maxWidth:140,height:'auto',display:'block',marginBottom:8}} />
+        <img src={'/Logo%20Principal_01_blanc.png'} alt="Clique Beauty" style={{width:'100%',maxWidth:140,height:'auto',display:'block',marginBottom:8}} />
         <div className="sb-logo-sub">Finance & Operations</div>
       </div>
       {nav.map((section, i) => (

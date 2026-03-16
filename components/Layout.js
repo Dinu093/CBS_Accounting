@@ -9,31 +9,31 @@ const NAV = [
     { href: '/finance', label: 'Finance', icon: 'chart' },
   ]},
   { section: 'Commerce', items: [
-  { href: '/customers', label: 'Customers', icon: 'users' },
-  { href: '/products', label: 'Products', icon: 'box' },
-  { href: '/price-lists', label: 'Price Lists', icon: 'report' },
-  { href: '/orders', label: 'Orders', icon: 'trending' },
+    { href: '/customers', label: 'Customers', icon: 'users' },
+    { href: '/products', label: 'Products', icon: 'box' },
+    { href: '/price-lists', label: 'Price Lists', icon: 'report' },
+    { href: '/orders', label: 'Orders', icon: 'trending' },
   ]},
   { section: 'Inventory', items: [
     { href: '/stock', label: 'Stock', icon: 'layers' },
     { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },
   ]},
   { section: 'Billing', items: [
-  { href: '/invoices', label: 'Invoices', icon: 'report' },
-  { href: '/credit-notes', label: 'Credit Notes', icon: 'swap' },
-  { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
-]},
- { section: 'Cash', items: [
-  { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
-  { href: '/shopify-payouts', label: 'Shopify Payouts', icon: 'trending' },
-  { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
-  { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
-]},
-{ section: 'Reporting', items: [
-  { href: '/pl', label: 'P&L', icon: 'chart' },
-  { href: '/expenses', label: 'Expenses', icon: 'report' },
-  { href: '/reports', label: 'Reports', icon: 'report' },
-]},
+    { href: '/invoices', label: 'Invoices', icon: 'report' },
+    { href: '/credit-notes', label: 'Credit Notes', icon: 'swap' },
+    { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
+  ]},
+  { section: 'Cash', items: [
+    { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
+    { href: '/shopify-payouts', label: 'Shopify Payouts', icon: 'trending' },
+    { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
+    { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
+  ]},
+  { section: 'Reporting', items: [
+    { href: '/pl', label: 'P&L', icon: 'chart' },
+    { href: '/expenses', label: 'Expenses', icon: 'report' },
+    { href: '/reports', label: 'Reports', icon: 'report' },
+  ]},
 ]
 
 const NAV_VIEWER = [
@@ -92,14 +92,23 @@ export default function Layout({ children }) {
   const SidebarInner = () => (
     <>
       <div className="sb-logo">
-        <img src={'/Logo%20Principal_01_blanc.png'} alt="Clique Beauty" style={{width:'100%',maxWidth:140,height:'auto',display:'block',marginBottom:8}} />
+        <img
+          src="/Logo Principal_01_blanc.png"
+          alt="Clique Beauty"
+          style={{ width: '100%', maxWidth: 140, height: 'auto', display: 'block', marginBottom: 8 }}
+          onError={e => { e.target.style.display = 'none' }}
+        />
         <div className="sb-logo-sub">Finance & Operations</div>
       </div>
       {nav.map((section, i) => (
         <div key={i}>
           <div className="sb-section">{section.section}</div>
           {section.items.map(item => (
-            <button key={item.href} className={`sb-item${router.pathname === item.href ? ' active' : ''}`} onClick={() => router.push(item.href)}>
+            <button
+              key={item.href}
+              className={`sb-item${router.pathname === item.href ? ' active' : ''}`}
+              onClick={() => router.push(item.href)}
+            >
               <Icon name={item.icon} />
               {item.label}
             </button>
@@ -108,7 +117,10 @@ export default function Layout({ children }) {
       ))}
       <div className="sb-bottom">
         <div className="sb-user">{user?.email}</div>
-        <div className="sb-role"><span className="sb-role-dot" />{isAdmin ? 'Admin' : 'Viewer'}</div>
+        <div className="sb-role">
+          <span className="sb-role-dot" />
+          {isAdmin ? 'Admin' : 'Viewer'}
+        </div>
         <button className="sb-signout" onClick={logout}>Sign out</button>
       </div>
     </>
@@ -118,7 +130,10 @@ export default function Layout({ children }) {
     <div className="app">
       <div className="mobile-header">
         <span style={{ fontSize: 14, fontWeight: 600 }}>Clique Beauty</span>
-        <button style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }} onClick={() => setMenuOpen(!menuOpen)}>
+        <button
+          style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
           {menuOpen ? '✕' : '☰'}
         </button>
       </div>

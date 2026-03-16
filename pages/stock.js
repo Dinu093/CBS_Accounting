@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { FormField, ModalInput, ModalSelect, ModalError, ModalActions, BtnPrimary, BtnSecondary } from '../components/FormField'
@@ -8,6 +9,7 @@ function fmt(n) {
 }
 
 export default function Stock() {
+  const router = useRouter()
   const [stock, setStock] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -18,13 +20,12 @@ export default function Stock() {
   const [adjForm, setAdjForm] = useState({ product_id: '', warehouse_id: '', quantity: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-
   const f = (k, v) => setAdjForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
     fetchStock()
-    fetchProducts()
-    fetchWarehouses()
+    fetch('/api/products').then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : []))
+    fetch('/api/warehouses').then(r => r.json()).then(d => setWarehouses(Array.isArray(d) ? d : []))
   }, [reorderOnly])
 
   async function fetchStock() {
@@ -37,35 +38,16 @@ export default function Stock() {
     setLoading(false)
   }
 
-  async function fetchProducts() {
-    const res = await fetch('/api/products?status=active')
-    const data = await res.json()
-    setProducts(Array.isArray(data) ? data : [])
-  }
-
-  async function fetchWarehouses() {
-    const res = await fetch('/api/warehouses')
-    const data = await res.json()
-    setWarehouses(Array.isArray(data) ? data : [])
-  }
-
   async function handleAdjust(e) {
     e.preventDefault()
     setSaving(true)
     setError(null)
     const qty = parseInt(adjForm.quantity)
     if (isNaN(qty) || qty === 0) { setError('Quantity cannot be zero'); setSaving(false); return }
-
-    // Crée un mouvement de type adjustment
     const res = await fetch('/api/stock-adjustment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        product_id: adjForm.product_id,
-        warehouse_id: adjForm.warehouse_id,
-        quantity: qty,
-        notes: adjForm.notes,
-      })
+      body: JSON.stringify({ ...adjForm, quantity: qty })
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); setSaving(false); return }
@@ -76,7 +58,9 @@ export default function Stock() {
   }
 
   const filtered = stock.filter(s =>
-    !search || s.sku?.toLowerCase().includes(search.toLowerCase()) || s.product_name?.toLowerCase().includes(search.toLowerCase())
+    !search ||
+    s.sku?.toLowerCase().includes(search.toLowerCase()) ||
+    s.product_name?.toLowerCase().includes(search.toLowerCase())
   )
 
   const totalValue = filtered.reduce((s, r) => s + Number(r.inventory_value || 0), 0)
@@ -89,26 +73,22 @@ export default function Stock() {
           <h1>Stock</h1>
           <p className="page-sub">
             Inventory value: <strong>{fmt(totalValue)}</strong>
-            {alerts > 0 && <span style={{ color: '#c00', marginLeft: 8 }}>⚠ {alerts} reorder alert{alerts > 1 ? 's' : ''}</span>}
+            {alerts > 0 && <span style={{ color: 'var(--red)', marginLeft: 8 }}>⚠ {alerts} reorder alert{alerts > 1 ? 's' : ''}</span>}
           </p>
         </div>
         <div className="page-actions">
-          <button
-  className="btn-primary"
-  style={{ textDecoration: 'none' }}
-  onClick={() => window.location.href = '/receipts'}
->
-  + Receive Stock
-</button>
-          <a href="/receipts" className="btn-primary" style={{ textDecoration: 'none', padding: '0.4rem 1rem', borderRadius: 8, fontSize: 14 }}>
+          <button className="btn-outline" onClick={() => setAdjustOpen(true)}>
+            ± Adjust
+          </button>
+          <button className="btn-primary" onClick={() => router.push('/receipts')}>
             + Receive Stock
-          </a>
+          </button>
         </div>
       </div>
 
       <div className="filter-bar">
         <input className="search-input" placeholder="Search SKU or product..." value={search} onChange={e => setSearch(e.target.value)} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', color: 'var(--text-2)' }}>
           <input type="checkbox" checked={reorderOnly} onChange={e => setReorderOnly(e.target.checked)} />
           Reorder alerts only
         </label>
@@ -147,23 +127,23 @@ export default function Stock() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>Loading...</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: 13 }}>Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>No stock data. Add products and receive stock first.</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: 13 }}>No stock data. Receive stock first.</td></tr>
             ) : filtered.map((s, i) => (
               <tr key={i} style={s.reorder_alert ? { background: '#fff8f8' } : {}}>
-                <td><strong>{s.sku}</strong></td>
-                <td>{s.product_name}</td>
-                <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{s.family || '—'}</td>
-                <td style={{ textAlign: 'right' }}>{s.qty_on_hand}</td>
-                <td style={{ textAlign: 'right', color: s.qty_committed > 0 ? '#c07a00' : 'inherit' }}>{s.qty_committed}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: s.qty_available <= 0 ? '#c00' : 'inherit' }}>{s.qty_available}</td>
-                <td style={{ textAlign: 'right', color: 'var(--text-2)' }}>{s.unit_cost_avg ? fmt(s.unit_cost_avg) : '—'}</td>
-                <td style={{ textAlign: 'right' }}>{fmt(s.inventory_value)}</td>
+                <td><strong style={{ fontSize: 13 }}>{s.sku}</strong></td>
+                <td style={{ fontSize: 13 }}>{s.product_name}</td>
+                <td style={{ fontSize: 12, color: 'var(--text-3)' }}>{s.family || '—'}</td>
+                <td style={{ textAlign: 'right', fontSize: 13 }}>{s.qty_on_hand}</td>
+                <td style={{ textAlign: 'right', fontSize: 13, color: s.qty_committed > 0 ? 'var(--amber)' : 'inherit' }}>{s.qty_committed}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, fontSize: 13, color: s.qty_available <= 0 ? 'var(--red)' : 'inherit' }}>{s.qty_available}</td>
+                <td style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-3)' }}>{s.unit_cost_avg ? fmt(s.unit_cost_avg) : '—'}</td>
+                <td style={{ textAlign: 'right', fontSize: 13 }}>{fmt(s.inventory_value)}</td>
                 <td>
                   {s.reorder_alert
-                    ? <span className="badge badge-red">⚠ Reorder</span>
-                    : <span className="badge badge-green">OK</span>
+                    ? <span className="badge badge-red" style={{ fontSize: 11 }}>⚠ Reorder</span>
+                    : <span className="badge badge-green" style={{ fontSize: 11 }}>OK</span>
                   }
                 </td>
               </tr>
@@ -172,11 +152,10 @@ export default function Stock() {
         </table>
       </div>
 
-      {/* Modal ajustement stock */}
-      <Modal open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Stock Adjustment" subtitle="Correct inventory for damage, loss, or counting errors">
+      <Modal open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Stock Adjustment" subtitle="Correct inventory for damage, loss or counting errors">
         <form onSubmit={handleAdjust}>
-          <ModalError message={error} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', color: '#c53030', borderRadius: 8, padding: '0.6rem', fontSize: 13, marginBottom: '1rem' }}>{error}</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
             <FormField label="Product" required>
               <ModalSelect value={adjForm.product_id} onChange={e => f('product_id', e.target.value)} required>
                 <option value="">Select product...</option>
@@ -190,10 +169,10 @@ export default function Stock() {
               </ModalSelect>
             </FormField>
             <FormField label="Quantity" required hint="Positive to add, negative to remove (e.g. -5 for shrinkage)">
-              <ModalInput type="number" value={adjForm.quantity} onChange={e => f('quantity', e.target.value)} placeholder="e.g. -5 or +10" required />
+              <ModalInput type="number" value={adjForm.quantity} onChange={e => f('quantity', e.target.value)} placeholder="-5 or +10" required />
             </FormField>
             <FormField label="Reason" required>
-              <ModalInput value={adjForm.notes} onChange={e => f('notes', e.target.value)} placeholder="Damaged in transit, counting correction..." required />
+              <ModalInput value={adjForm.notes} onChange={e => f('notes', e.target.value)} placeholder="Damaged, counting correction..." required />
             </FormField>
           </div>
           <ModalActions>

@@ -9,11 +9,10 @@ const NAV = [
     { href: '/finance', label: 'Finance', icon: 'chart' },
   ]},
   { section: 'Commerce', items: [
-    { href: '/customers', label: 'Customers', icon: 'users' },
-    { href: '/locations', label: 'Locations', icon: 'map' },
-    { href: '/products', label: 'Products', icon: 'box' },
-    { href: '/price-lists', label: 'Price Lists', icon: 'report' },
-    { href: '/orders', label: 'Orders', icon: 'trending' },
+  { href: '/customers', label: 'Customers', icon: 'users' },
+  { href: '/products', label: 'Products', icon: 'box' },
+  { href: '/price-lists', label: 'Price Lists', icon: 'report' },
+  { href: '/orders', label: 'Orders', icon: 'trending' },
   ]},
   { section: 'Inventory', items: [
     { href: '/stock', label: 'Stock', icon: 'layers' },
@@ -93,7 +92,7 @@ export default function Layout({ children }) {
   const SidebarInner = () => (
     <>
       <div className="sb-logo">
-        <img src="data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/wAARC" alt="Clique Beauty" style={{width:'100%',maxWidth:160,height:'auto',opacity:0.95,display:'block',marginBottom:8}} />
+        <img src="/Logo Principal_01_blanc.png" alt="Clique Beauty" style={{width:'100%',maxWidth:140,height:'auto',display:'block',marginBottom:8}} />
         <div className="sb-logo-sub">Finance & Operations</div>
       </div>
       {nav.map((section, i) => (

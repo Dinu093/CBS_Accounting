@@ -188,7 +188,7 @@ function WholesalePanel({ customer, onClose, onRefresh, priceLists, onEdit }) {
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => openEditLoc(loc)} style={{ fontSize: 11, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.2rem 0.5rem', cursor: 'pointer', color: 'var(--text-2)' }}>Edit</button>
-                <button onClick={() => removeLocation(loc.id)} style={{ fontSize: 11, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.2rem 0.5rem', cursor: 'pointer', color: 'var(--red)' }}>Remove</button>
+                <button onClick={() => removeLocation(loc.id)} style={{ width: 24, height: 24, background: 'none', border: '1.5px solid #fed7d7', borderRadius: 6, cursor: 'pointer', color: '#c53030', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
               </div>
             </div>
           </div>
@@ -197,7 +197,7 @@ function WholesalePanel({ customer, onClose, onRefresh, priceLists, onEdit }) {
 
       <Modal open={locOpen} onClose={() => setLocOpen(false)} title={editingLoc ? 'Edit Location' : 'Add Location'} subtitle={customer.name}>
         <form onSubmit={saveLocation}>
-          <ModalError message={error} />
+          {error && <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', color: '#c53030', borderRadius: 8, padding: '0.6rem', fontSize: 13, marginBottom: '1rem' }}>{error}</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
             <FormField label="Location Name" required><ModalInput value={locForm.name} onChange={e => lf('name', e.target.value)} placeholder="Downtown Store" required /></FormField>
             <FormField label="Address"><ModalInput value={locForm.address_line1} onChange={e => lf('address_line1', e.target.value)} placeholder="123 Main St" /></FormField>
@@ -358,7 +358,7 @@ function EditCustomerModal({ open, onClose, customer, priceLists, onSaved }) {
   return (
     <Modal open={open} onClose={onClose} title="Edit Customer" subtitle={customer?.name} width={560}>
       <form onSubmit={handleSubmit}>
-        <ModalError message={error} />
+        {error && <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', color: '#c53030', borderRadius: 8, padding: '0.6rem', fontSize: 13, marginBottom: '1rem' }}>{error}</div>}
         <div style={{ marginBottom: '0.5rem', fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Company</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
           <div style={{ gridColumn: '1 / -1' }}>
@@ -460,6 +460,14 @@ export default function Customers() {
     setCreateOpen(false); setForm(EMPTY_CUSTOMER); fetchCustomers(); setSaving(false)
   }
 
+  async function deleteCustomer(c, e) {
+    e.stopPropagation()
+    if (!confirm(`Archive ${c.name}? They will be marked as inactive.`)) return
+    await fetch(`/api/customers?id=${c.id}`, { method: 'DELETE' })
+    if (selected?.id === c.id) setSelected(null)
+    fetchCustomers()
+  }
+
   const selectCustomer = (c) => setSelected(selected?.id === c.id ? null : c)
 
   return (
@@ -492,9 +500,10 @@ export default function Customers() {
         <input className="search-input" placeholder={`Search ${isEcom ? 'e-commerce customers' : 'distributors'}...`} value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
+      {/* Modal création */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New Customer" subtitle="Add a wholesale distributor or partner" width={580}>
         <form onSubmit={handleCreate}>
-          <ModalError message={error} />
+          {error && <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', color: '#c53030', borderRadius: 8, padding: '0.6rem', fontSize: 13, marginBottom: '1rem' }}>{error}</div>}
           <div style={{ marginBottom: '0.5rem', fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Company</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
             <div style={{ gridColumn: '1 / -1' }}>
@@ -546,7 +555,7 @@ export default function Customers() {
               {!isEcom && <><th>Terms</th><th>Discount</th><th>Locations</th></>}
               {isEcom && <><th>Orders</th><th>Source</th></>}
               <th>Status</th>
-              {!isEcom && <th style={{ width: 60 }}></th>}
+              <th style={{ width: isEcom ? 60 : 100 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -578,13 +587,21 @@ export default function Customers() {
                   </>
                 )}
                 <td><span className={`badge ${STATUS_COLORS[c.status] || 'badge-gray'}`} style={{ fontSize: 11 }}>{c.status}</span></td>
-                {!isEcom && (
-                  <td onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setEditCustomer(c)} style={{ fontSize: 12, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.25rem 0.6rem', cursor: 'pointer', color: 'var(--text-2)' }}>
-                      Edit
+                <td onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    {!isEcom && (
+                      <button onClick={() => setEditCustomer(c)} style={{ fontSize: 12, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.25rem 0.6rem', cursor: 'pointer', color: 'var(--text-2)' }}>
+                        Edit
+                      </button>
+                    )}
+                    <button
+                      onClick={e => deleteCustomer(c, e)}
+                      style={{ width: 26, height: 26, background: 'none', border: '1.5px solid #fed7d7', borderRadius: 6, cursor: 'pointer', color: '#c53030', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >
+                      ×
                     </button>
-                  </td>
-                )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

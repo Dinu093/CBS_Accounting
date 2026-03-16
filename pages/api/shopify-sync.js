@@ -1,105 +1,87 @@
 import { supabase } from '../../lib/supabase'
 
-const FREE_SHIPPING_THRESHOLD = 99
-const SHOPIFY_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN
-const SHOPIFY_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN
-
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  if (!SHOPIFY_DOMAIN || !SHOPIFY_TOKEN) {
-    return res.status(500).json({ error: 'Missing SHOPIFY_STORE_DOMAIN or SHOPIFY_ACCESS_TOKEN in environment variables' })
+  const SHOPIFY_STORE = process.env.NEXT_PUBLIC_SHOPIFY_STORE
+  const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN
+
+  if (!SHOPIFY_STORE || !SHOPIFY_TOKEN)
+    return res.status(500).json({ error: 'SHOPIFY_STORE et SHOPIFY_ADMIN_API_TOKEN manquants dans les variables d\'environnement' })
+
+  const { days_back = 30 } = req.body
+  const since = new Date()
+  since.setDate(since.getDate() - days_back)
+
+  // Fetch orders depuis Shopify
+  const shopifyRes = await fetch(
+    `https://${SHOPIFY_STORE}/admin/api/2024-01/orders.json?status=any&created_at_min=${since.toISOString()}&limit=250`,
+    { headers: { 'X-Shopify-Access-Token': SHOPIFY_TOKEN } }
+  )
+
+  if (!shopifyRes.ok) {
+    const err = await shopifyRes.text()
+    return res.status(502).json({ error: `Shopify API error: ${err}` })
   }
 
-  let allOrders = [], pageInfo = null, page = 0
-  const maxPages = 20
+  const { orders } = await shopifyRes.json()
+  const results = { imported: 0, skipped: 0, errors: [] }
 
-  try {
-    // Fetch all orders from Jan 1 2026 onwards, paginated
-    do {
-      let url = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min=2026-01-01T00:00:00Z&fields=id,name,order_number,created_at,financial_status,subtotal_price,total_shipping_price_set,line_items,customer,shipping_address,billing_address,email`
-      if (pageInfo) url += `&page_info=${pageInfo}`
+  for (const order of orders) {
+    // Vérifie si déjà importé
+    const { data: existing } = await supabase
+      .from('sales_orders')
+      .select('id')
+      .eq('shopify_order_id', order.id.toString())
+      .maybeSingle()
 
-      const r = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_TOKEN, 'Content-Type': 'application/json' } })
-      if (!r.ok) { const err = await r.text(); return res.status(500).json({ error: 'Shopify API error: ' + err }) }
+    if (existing) { results.skipped++; continue }
+    if (!['paid', 'partially_paid'].includes(order.financial_status)) { results.skipped++; continue }
 
-      const data = await r.json()
-      allOrders = allOrders.concat(data.orders || [])
+    try {
+      // Réutilise la même logique que le webhook
+      const webhookHandler = await import('./webhooks/shopify')
+      // Import simplifié direct
+      const customerId = await findOrCreateCustomer(order)
+      if (!customerId) { results.errors.push(`No customer for order ${order.name}`); continue }
 
-      // Get next page from Link header
-      const link = r.headers.get('Link') || ''
-      const nextMatch = link.match(/<[^>]*page_info=([^&>]+)[^>]*>; rel="next"/)
-      pageInfo = nextMatch ? nextMatch[1] : null
-      page++
-    } while (pageInfo && page < maxPages)
+      const { count } = await supabase
+        .from('sales_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('channel', 'ecommerce')
+      const order_number = `CBS-EC-${String((count || 0) + 1).padStart(5, '0')}`
 
-    let inserted = 0, skipped = 0, errors = []
+      await supabase.from('sales_orders').insert({
+        order_number,
+        channel: 'ecommerce',
+        status: order.fulfillment_status === 'fulfilled' ? 'fulfilled' : 'confirmed',
+        order_date: order.created_at.split('T')[0],
+        customer_id: customerId,
+        subtotal: parseFloat(order.subtotal_price || 0),
+        tax_amount: parseFloat(order.total_tax || 0),
+        total_amount: parseFloat(order.total_price || 0),
+        payment_terms_days: 0,
+        shopify_order_id: order.id.toString(),
+        shopify_order_number: order.name,
+        notes: `Synced from Shopify — ${order.name}`,
+      })
 
-    for (const order of allOrders) {
-      const orderDate = order.created_at?.slice(0, 10)
-      if (!orderDate) continue
-
-      const reference = order.name || String(order.order_number)
-
-      // Skip duplicates
-      const { data: existing } = await supabase.from('sales_orders').select('id').eq('reference', reference).eq('source', 'shopify')
-      if (existing?.length > 0) { skipped++; continue }
-
-      const subtotal = parseFloat(order.subtotal_price || 0)
-      const shippingAmt = parseFloat(order.total_shipping_price_set?.shop_money?.amount || 0)
-      const cliquePaysShipping = subtotal >= FREE_SHIPPING_THRESHOLD
-      const shipping = order.shipping_address || order.billing_address || {}
-      const customer = order.customer || {}
-      const buyerName = shipping.name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Shopify Customer'
-
-      const { data: ord, error: ordErr } = await supabase.from('sales_orders').insert([{
-        date: orderDate,
-        channel: 'E-commerce',
-        reference,
-        payment_status: order.financial_status === 'paid' ? 'paid' : 'pending',
-        total_amount: subtotal,
-        shipping_cost: cliquePaysShipping ? shippingAmt : 0,
-        buyer_name: buyerName,
-        buyer_email: customer.email || order.email || null,
-        buyer_phone: shipping.phone || customer.phone || null,
-        buyer_address: [shipping.address1, shipping.address2].filter(Boolean).join(', ') || null,
-        buyer_city: shipping.city || null,
-        buyer_state: shipping.province_code || null,
-        buyer_zip: shipping.zip || null,
-        notes: cliquePaysShipping ? 'Free shipping (order ≥$99)' : 'Customer paid shipping',
-        source: 'shopify',
-      }]).select()
-
-      if (ordErr) { errors.push({ reference, error: ordErr.message }); continue }
-      const orderId = ord[0].id
-
-      // Line items
-      const lineItems = (order.line_items || []).map(item => ({
-        order_id: orderId, product_id: null,
-        quantity: item.quantity, unit_price: parseFloat(item.price),
-        unit_cost: 0, total_price: parseFloat(item.price) * item.quantity, margin: 0,
-      }))
-      if (lineItems.length > 0) await supabase.from('sale_items').insert(lineItems)
-
-      // Revenue transaction
-      await supabase.from('transactions').insert([{
-        date: orderDate, description: 'Shopify — ' + reference,
-        category: 'Sales — E-commerce', type: 'revenue', amount: subtotal, note: orderId, source: 'shopify',
-      }])
-
-      // Shipping expense if Clique pays
-      if (cliquePaysShipping && shippingAmt > 0) {
-        await supabase.from('transactions').insert([{
-          date: orderDate, description: 'Shipping — ' + reference,
-          category: 'Shipping (outbound)', type: 'cogs', amount: shippingAmt, note: orderId, source: 'shopify',
-        }])
-      }
-
-      inserted++
+      results.imported++
+    } catch (err) {
+      results.errors.push(`${order.name}: ${err.message}`)
     }
-
-    return res.json({ success: true, total: allOrders.length, inserted, skipped, errors })
-  } catch (err) {
-    return res.status(500).json({ error: err.message })
   }
+
+  return res.status(200).json(results)
+}
+
+async function findOrCreateCustomer(order) {
+  const shopifyCustomerId = order.customer?.id?.toString()
+  if (shopifyCustomerId) {
+    const { data } = await supabase.from('customers').select('id').eq('shopify_customer_id', shopifyCustomerId).maybeSingle()
+    if (data) return data.id
+  }
+  const name = [order.customer?.first_name, order.customer?.last_name].filter(Boolean).join(' ') || order.email || 'Shopify Customer'
+  const { data } = await supabase.from('customers').insert({ name, type: 'retail', email: order.customer?.email || order.email, shopify_customer_id: shopifyCustomerId || null, payment_terms_days: 0 }).select('id').single()
+  return data?.id || null
 }

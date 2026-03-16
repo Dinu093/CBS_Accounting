@@ -8,12 +8,11 @@ const NAV = [
     { href: '/', label: 'Operations', icon: 'grid' },
     { href: '/finance', label: 'Finance', icon: 'chart' },
   ]},
-  { section: 'Commerce', items: [
+ { section: 'Commerce', items: [
   { href: '/customers', label: 'Customers', icon: 'users' },
   { href: '/products', label: 'Products', icon: 'box' },
-  { href: '/price-lists', label: 'Price Lists', icon: 'report' },
   { href: '/orders', label: 'Orders', icon: 'trending' },
-  ]},
+]},
   { section: 'Inventory', items: [
     { href: '/stock', label: 'Stock', icon: 'layers' },
     { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },

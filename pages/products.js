@@ -4,7 +4,6 @@ import Modal from '../components/Modal'
 import { FormField, ModalInput, ModalSelect, ModalError, ModalActions, BtnPrimary, BtnSecondary } from '../components/FormField'
 
 const STATUS_COLORS = { active: 'badge-green', discontinued: 'badge-red', sample_only: 'badge-amber' }
-const STATUS_OPTIONS = ['active', 'discontinued', 'sample_only']
 
 function fmt(n) {
   return n !== null && n !== undefined ? '$' + Number(n).toFixed(2) : '—'
@@ -40,7 +39,6 @@ function ProductForm({ form, setForm, families, onAddFamily }) {
 
   return (
     <>
-      {/* Identité */}
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Identity</div>
       <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
         <FormField label="SKU" required>
@@ -84,7 +82,6 @@ function ProductForm({ form, setForm, families, onAddFamily }) {
         </div>
       </div>
 
-      {/* Pricing */}
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Pricing</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
         <FormField label="Retail Price ($)" hint="Default e-commerce price">
@@ -95,9 +92,8 @@ function ProductForm({ form, setForm, families, onAddFamily }) {
         </FormField>
       </div>
 
-      {/* Inventory */}
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Inventory</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.875rem' }}>
         <FormField label="Reorder Point (units)">
           <ModalInput type="number" value={form.reorder_point_units} onChange={e => f('reorder_point_units', parseInt(e.target.value) || 0)} />
         </FormField>
@@ -105,7 +101,7 @@ function ProductForm({ form, setForm, families, onAddFamily }) {
           <ModalInput type="number" value={form.replenishment_lead_days} onChange={e => f('replenishment_lead_days', parseInt(e.target.value) || 30)} />
         </FormField>
         <FormField label="Tags" hint="Comma separated">
-          <ModalInput value={form.tags} onChange={e => f('tags', e.target.value)} placeholder="bestseller, vitamin-c" />
+          <ModalInput value={form.tags} onChange={e => f('tags', e.target.value)} placeholder="bestseller, new" />
         </FormField>
       </div>
     </>
@@ -130,7 +126,7 @@ export default function Products() {
 
   async function fetchProducts() {
     setLoading(true)
-    const res = await fetch(`/api/products${search ? `?search=${search}` : ''}`)
+    const res = await fetch('/api/products')
     const data = await res.json()
     setProducts(Array.isArray(data) ? data : [])
     setLoading(false)
@@ -143,18 +139,12 @@ export default function Products() {
   }
 
   async function addFamily(name) {
-    await fetch('/api/product-families', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    })
+    await fetch('/api/product-families', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
     fetchFamilies()
   }
 
   async function handleCreate(e) {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
+    e.preventDefault(); setSaving(true); setError(null)
     const payload = {
       ...form,
       retail_price: form.retail_price ? parseFloat(form.retail_price) : null,
@@ -170,9 +160,7 @@ export default function Products() {
   }
 
   async function handleEdit(e) {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
+    e.preventDefault(); setSaving(true); setError(null)
     const payload = {
       id: editProduct.id,
       ...editForm,
@@ -188,6 +176,13 @@ export default function Products() {
     const data = await res.json()
     if (!res.ok) { setError(data.error); setSaving(false); return }
     setEditProduct(null); fetchProducts(); setSaving(false)
+  }
+
+  async function deleteProduct(p, e) {
+    e.stopPropagation()
+    if (!confirm(`Discontinue ${p.name}? It will be hidden from the active catalog.`)) return
+    await fetch(`/api/products?id=${p.id}`, { method: 'DELETE' })
+    fetchProducts()
   }
 
   function openEdit(product, e) {
@@ -230,7 +225,7 @@ export default function Products() {
       </div>
 
       <div className="filter-bar">
-        <input className="search-input" placeholder="Search SKU or name..." value={search} onChange={e => { setSearch(e.target.value); fetchProducts() }} />
+        <input className="search-input" placeholder="Search SKU or name..." value={search} onChange={e => setSearch(e.target.value)} />
         <select className="chip" value={familyFilter} onChange={e => setFamilyFilter(e.target.value)}>
           <option value="">All families</option>
           {families.filter(f => existingFamilies.includes(f.name)).map(f => (
@@ -310,7 +305,7 @@ export default function Products() {
               <th style={{ textAlign: 'right' }}>Available</th>
               <th>Alert</th>
               <th>Status</th>
-              <th style={{ width: 80 }}></th>
+              <th style={{ width: 90 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -332,12 +327,20 @@ export default function Products() {
                   <td>{alert ? <span className="badge badge-red" style={{ fontSize: 11 }}>⚠ Reorder</span> : <span className="badge badge-green" style={{ fontSize: 11 }}>OK</span>}</td>
                   <td><span className={`badge ${STATUS_COLORS[p.status] || 'badge-gray'}`} style={{ fontSize: 11 }}>{p.status}</span></td>
                   <td onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={e => openEdit(p, e)}
-                      style={{ fontSize: 12, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.25rem 0.6rem', cursor: 'pointer', color: 'var(--text-2)' }}
-                    >
-                      Edit
-                    </button>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <button
+                        onClick={e => openEdit(p, e)}
+                        style={{ fontSize: 12, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.25rem 0.6rem', cursor: 'pointer', color: 'var(--text-2)' }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={e => deleteProduct(p, e)}
+                        style={{ width: 26, height: 26, background: 'none', border: '1.5px solid #fed7d7', borderRadius: 6, cursor: 'pointer', color: '#c53030', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )

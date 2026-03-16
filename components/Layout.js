@@ -9,25 +9,25 @@ const NAV = [
     { href: '/finance', label: 'Finance', icon: 'chart' },
   ]},
   { section: 'Commerce', items: [
-  { href: '/customers', label: 'Customers', icon: 'users' },
-  { href: '/locations', label: 'Locations', icon: 'map' },
-  { href: '/products', label: 'Products', icon: 'box' },
-  { href: '/price-lists', label: 'Price Lists', icon: 'report' },
-  { href: '/orders', label: 'Orders', icon: 'trending' },
-]},,
- { section: 'Inventory', items: [
-  { href: '/stock', label: 'Stock', icon: 'layers' },
-  { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },
-]},
+    { href: '/customers', label: 'Customers', icon: 'users' },
+    { href: '/locations', label: 'Locations', icon: 'map' },
+    { href: '/products', label: 'Products', icon: 'box' },
+    { href: '/price-lists', label: 'Price Lists', icon: 'report' },
+    { href: '/orders', label: 'Orders', icon: 'trending' },
+  ]},
+  { section: 'Inventory', items: [
+    { href: '/stock', label: 'Stock', icon: 'layers' },
+    { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },
+  ]},
   { section: 'Billing', items: [
     { href: '/invoices', label: 'Invoices', icon: 'report' },
     { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
   ]},
   { section: 'Cash', items: [
-  { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
-  { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
-  { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
-]},
+    { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
+    { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
+    { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
+  ]},
   { section: 'Reporting', items: [
     { href: '/pl', label: 'P&L', icon: 'chart' },
     { href: '/reports', label: 'Reports', icon: 'report' },
@@ -58,7 +58,8 @@ function Icon({ name }) {
     card: <><rect x="1" y="3" width="12" height="9" rx="1.5"/><path d="M1 6h12"/></>,
     swap: <><path d="M2 8l3-3 3 3"/><path d="M5 5v6"/><path d="M12 6l-3 3-3-3" transform="translate(6,0)"/><path d="M9 9V3"/></>,
     report: <><rect x="2" y="1" width="10" height="12" rx="1"/><line x1="4" y1="5" x2="10" y2="5"/><line x1="4" y1="8" x2="10" y2="8"/><line x1="4" y1="11" x2="7" y2="11"/></>,
-    check: <><polyline points="2,7 6,11 12,3" strokeLinecap="round" strokeLinejoin="round"/></>,
+    check: <><polyline points="2,7 6,11 12,3" strokeLinecap="round" strokeLinejoin="round"/>/>,
+    map: <><circle cx="7" cy="6" r="3"/><path d="M7 9c-2 2.5-4 4-4 5.5C3 15.3 4.8 16 7 16s4-.7 4-1.5C11 13 9 11.5 7 9z" transform="scale(0.85) translate(1,-1)"/></>,
   }
   return (
     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">

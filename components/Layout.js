@@ -12,8 +12,9 @@ const NAV = [
   { href: '/customers', label: 'Customers', icon: 'users' },
   { href: '/locations', label: 'Locations', icon: 'map' },
   { href: '/products', label: 'Products', icon: 'box' },
+  { href: '/price-lists', label: 'Price Lists', icon: 'report' },
   { href: '/orders', label: 'Orders', icon: 'trending' },
-]},
+]},,
  { section: 'Inventory', items: [
   { href: '/stock', label: 'Stock', icon: 'layers' },
   { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },

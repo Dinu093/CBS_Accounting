@@ -93,9 +93,13 @@ export default function Stock() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn-outline" onClick={() => setAdjustOpen(true)} style={{ marginRight: 8 }}>
-            ± Adjust Stock
-          </button>
+          <button
+  className="btn-primary"
+  style={{ textDecoration: 'none' }}
+  onClick={() => window.location.href = '/receipts'}
+>
+  + Receive Stock
+</button>
           <a href="/receipts" className="btn-primary" style={{ textDecoration: 'none', padding: '0.4rem 1rem', borderRadius: 8, fontSize: 14 }}>
             + Receive Stock
           </a>

@@ -1,27 +1,45 @@
 import { supabase } from '../../lib/supabase'
 
 export default async function handler(req, res) {
+
   if (req.method === 'GET') {
-    const { data, error } = await supabase.from('inventory').select('*').order('product_name')
+    const { status, family, search } = req.query
+    let query = supabase
+      .from('products')
+      .select('*, stock:stock_levels(*)')
+      .order('sku')
+    if (status) query = query.eq('status', status)
+    if (family) query = query.eq('family', family)
+    if (search) query = query.or(`sku.ilike.%${search}%,name.ilike.%${search}%`)
+    const { data, error } = await query
     if (error) return res.status(500).json({ error: error.message })
-    return res.json(data)
+    return res.status(200).json(data)
   }
+
   if (req.method === 'POST') {
-    const { data, error } = await supabase.from('inventory').insert([req.body]).select()
+    const { sku, name, family, description, replenishment_lead_days, reorder_point_units } = req.body
+    if (!sku || !name) return res.status(400).json({ error: 'sku et name sont obligatoires' })
+    const { data, error } = await supabase
+      .from('products')
+      .insert({ sku, name, family, description, replenishment_lead_days, reorder_point_units, status: 'active' })
+      .select()
+      .single()
     if (error) return res.status(500).json({ error: error.message })
-    return res.json(data[0])
+    return res.status(201).json(data)
   }
-  if (req.method === 'PUT') {
+
+  if (req.method === 'PATCH') {
     const { id, ...updates } = req.body
-    const { data, error } = await supabase.from('inventory').update(updates).eq('id', id).select()
+    if (!id) return res.status(400).json({ error: 'id obligatoire' })
+    const { data, error } = await supabase
+      .from('products')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
     if (error) return res.status(500).json({ error: error.message })
-    return res.json(data[0])
+    return res.status(200).json(data)
   }
-  if (req.method === 'DELETE') {
-    const { id } = req.query
-    const { error } = await supabase.from('inventory').delete().eq('id', id)
-    if (error) return res.status(500).json({ error: error.message })
-    return res.json({ success: true })
-  }
-  res.status(405).end()
+
+  res.status(405).json({ error: 'Method not allowed' })
 }

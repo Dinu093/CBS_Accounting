@@ -8,9 +8,16 @@ function fmt(n) {
 }
 
 const EMPTY_FORM = {
-  supplier_id: '', warehouse_id: '', received_date: new Date().toISOString().split('T')[0],
-  reference_number: '', notes: '',
+  supplier_id: '',
+  warehouse_id: '',
+  received_date: new Date().toISOString().split('T')[0],
+  reference_number: '',
+  payment_terms_days: 60,
+  tariff_amount: 0,
+  notes: '',
 }
+
+const PAYMENT_COLORS = { paid: 'badge-green', unpaid: 'badge-amber' }
 
 export default function Receipts() {
   const [receipts, setReceipts] = useState([])
@@ -65,10 +72,21 @@ export default function Receipts() {
     setError(null)
     const validLines = lines.filter(l => l.product_id && l.quantity && l.unit_cost)
     if (!validLines.length) { setError('At least one complete line required'); setSaving(false); return }
+    if (!form.warehouse_id) { setError('Please select a warehouse'); setSaving(false); return }
+
     const res = await fetch('/api/receipts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, lines: validLines.map(l => ({ ...l, quantity: parseInt(l.quantity), unit_cost: parseFloat(l.unit_cost), freight_cost: parseFloat(l.freight_cost) || 0, customs_cost: parseFloat(l.customs_cost) || 0 })) })
+      body: JSON.stringify({
+        ...form,
+        lines: validLines.map(l => ({
+          ...l,
+          quantity: parseInt(l.quantity),
+          unit_cost: parseFloat(l.unit_cost),
+          freight_cost: parseFloat(l.freight_cost) || 0,
+          customs_cost: parseFloat(l.customs_cost) || 0,
+        }))
+      })
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); setSaving(false); return }
@@ -79,15 +97,34 @@ export default function Receipts() {
     setSaving(false)
   }
 
+  async function markPaid(id) {
+    await fetch('/api/receipts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, payment_status: 'paid' })
+    })
+    fetchReceipts()
+  }
+
+  const totalUnpaid = receipts
+    .filter(r => r.payment_status === 'unpaid')
+    .reduce((s, r) => {
+      const lineTotal = (r.lines || []).reduce((ls, l) => ls + Number(l.total_landed_cost || 0), 0)
+      return s + lineTotal
+    }, 0)
+
   return (
     <Layout>
       <div className="page-header">
         <div>
           <h1>Stock Receipts</h1>
-          <p className="page-sub">{receipts.length} receipt{receipts.length !== 1 ? 's' : ''}</p>
+          <p className="page-sub">
+            {receipts.length} receipt{receipts.length !== 1 ? 's' : ''}
+            {totalUnpaid > 0 && <span style={{ color: 'var(--amber)', marginLeft: 8 }}>· AP outstanding: <strong>{fmt(totalUnpaid)}</strong></span>}
+          </p>
         </div>
         <div className="page-actions">
-          <button className="btn-primary" onClick={() => { setOpen(true); setError(null) }}>
+          <button className="btn-primary" onClick={() => { setOpen(true); setError(null); setForm(EMPTY_FORM); setLines([{ product_id: '', quantity: 1, unit_cost: '', freight_cost: 0, customs_cost: 0 }]) }}>
             + New Receipt
           </button>
         </div>
@@ -102,31 +139,52 @@ export default function Receipts() {
               <th>Supplier</th>
               <th>Warehouse</th>
               <th>Reference</th>
+              <th>Payment Due</th>
+              <th>Payment</th>
               <th style={{ textAlign: 'right' }}>Lines</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: 13 }}>Loading...</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: 13 }}>Loading...</td></tr>
             ) : receipts.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: 13 }}>No receipts yet.</td></tr>
-            ) : receipts.map(r => (
-              <tr key={r.id}>
-                <td><strong style={{ fontSize: 13 }}>{r.receipt_number}</strong></td>
-                <td style={{ fontSize: 13 }}>{r.received_date}</td>
-                <td style={{ fontSize: 13 }}>{r.supplier?.name || '—'}</td>
-                <td style={{ fontSize: 13 }}>{r.warehouse?.name || '—'}</td>
-                <td style={{ fontSize: 13, color: 'var(--text-3)' }}>{r.reference_number || '—'}</td>
-                <td style={{ textAlign: 'right', fontSize: 13 }}>{r.lines?.length || 0}</td>
-              </tr>
-            ))}
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: 13 }}>No receipts yet.</td></tr>
+            ) : receipts.map(r => {
+              const isPastDue = r.payment_status === 'unpaid' && r.payment_due_date && new Date(r.payment_due_date) < new Date()
+              return (
+                <tr key={r.id}>
+                  <td><strong style={{ fontSize: 13 }}>{r.receipt_number}</strong></td>
+                  <td style={{ fontSize: 13 }}>{r.receipt_date}</td>
+                  <td style={{ fontSize: 13 }}>{r.supplier?.name || <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
+                  <td style={{ fontSize: 13 }}>{r.warehouse?.name || '—'}</td>
+                  <td style={{ fontSize: 13, color: 'var(--text-3)' }}>{r.reference_number || '—'}</td>
+                  <td style={{ fontSize: 13, color: isPastDue ? 'var(--red)' : 'var(--text-3)' }}>
+                    {r.payment_due_date || '—'}
+                    {isPastDue && <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 600 }}>OVERDUE</span>}
+                  </td>
+                  <td><span className={`badge ${PAYMENT_COLORS[r.payment_status] || 'badge-gray'}`} style={{ fontSize: 11 }}>{r.payment_status}</span></td>
+                  <td style={{ textAlign: 'right', fontSize: 13 }}>{r.lines?.length || 0}</td>
+                  <td>
+                    {r.payment_status === 'unpaid' && (
+                      <button
+                        onClick={() => { if (confirm('Mark this receipt as paid?')) markPaid(r.id) }}
+                        style={{ fontSize: 11, fontWeight: 500, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, padding: '0.2rem 0.55rem', cursor: 'pointer', color: 'var(--green)' }}
+                      >
+                        Mark Paid
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="New Stock Receipt" subtitle="Record incoming inventory" width={700}>
+      <Modal open={open} onClose={() => setOpen(false)} title="New Stock Receipt" subtitle="Record incoming inventory" width={720}>
         <form onSubmit={handleSubmit}>
-          <ModalError message={error} />
+          {error && <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', color: '#c53030', borderRadius: 8, padding: '0.6rem 0.875rem', fontSize: 13, marginBottom: '1rem' }}>{error}</div>}
 
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Receipt Details</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
@@ -148,11 +206,19 @@ export default function Receipts() {
             <FormField label="Reference / PO Number">
               <ModalInput value={form.reference_number} onChange={e => f('reference_number', e.target.value)} placeholder="PO-2024-001" />
             </FormField>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <FormField label="Notes">
-                <ModalInput value={form.notes} onChange={e => f('notes', e.target.value)} />
-              </FormField>
-            </div>
+          </div>
+
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Payment to Supplier</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.875rem', marginBottom: '1.25rem' }}>
+            <FormField label="Payment Terms (days)" hint="Net 30, 60...">
+              <ModalInput type="number" value={form.payment_terms_days} onChange={e => f('payment_terms_days', parseInt(e.target.value) || 60)} />
+            </FormField>
+            <FormField label="Tariffs / Customs ($)" hint="Paid to customs to release palette">
+              <ModalInput type="number" step="0.01" value={form.tariff_amount} onChange={e => f('tariff_amount', parseFloat(e.target.value) || 0)} placeholder="0.00" />
+            </FormField>
+            <FormField label="Notes">
+              <ModalInput value={form.notes} onChange={e => f('notes', e.target.value)} />
+            </FormField>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -186,7 +252,7 @@ export default function Receipts() {
               <div style={{ paddingBottom: 2 }}>
                 {lines.length > 1 && (
                   <button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))}
-                    style={{ width: 32, height: 38, background: 'none', border: '1px solid var(--border-2)', borderRadius: 6, cursor: 'pointer', color: 'var(--red)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    style={{ width: 32, height: 38, background: 'none', border: '1.5px solid #fed7d7', borderRadius: 6, cursor: 'pointer', color: '#c53030', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                 )}
               </div>
             </div>
@@ -199,7 +265,7 @@ export default function Receipts() {
           )}
 
           <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '0.75rem 1rem', fontSize: 12, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.6 }}>
-            Stock levels will be updated automatically. WACOG (weighted average cost) will be recalculated for each product.
+            Stock levels and WACOG updated automatically. Supplier payment tracked separately — mark as paid when settled.
           </div>
 
           <ModalActions>

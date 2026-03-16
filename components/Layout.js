@@ -23,15 +23,17 @@ const NAV = [
     { href: '/invoices', label: 'Invoices', icon: 'report' },
     { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
   ]},
-  { section: 'Cash', items: [
-    { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
-    { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
-    { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
-  ]},
-  { section: 'Reporting', items: [
-    { href: '/pl', label: 'P&L', icon: 'chart' },
-    { href: '/reports', label: 'Reports', icon: 'report' },
-  ]},
+ { section: 'Cash', items: [
+  { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
+  { href: '/shopify-payouts', label: 'Shopify Payouts', icon: 'trending' },
+  { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
+  { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
+]},
+{ section: 'Reporting', items: [
+  { href: '/pl', label: 'P&L', icon: 'chart' },
+  { href: '/expenses', label: 'Expenses', icon: 'report' },
+  { href: '/reports', label: 'Reports', icon: 'report' },
+]},
 ]
 
 const NAV_VIEWER = [

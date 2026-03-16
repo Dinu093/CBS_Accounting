@@ -23,9 +23,10 @@ const NAV = [
     { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
   ]},
   { section: 'Cash', items: [
-    { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
-    { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
-  ]},
+  { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
+  { href: '/reconciliation', label: 'Reconciliation', icon: 'check' },
+  { href: '/mercury', label: 'Mercury Import', icon: 'arrow-in' },
+]},
   { section: 'Reporting', items: [
     { href: '/pl', label: 'P&L', icon: 'chart' },
     { href: '/reports', label: 'Reports', icon: 'report' },

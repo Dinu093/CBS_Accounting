@@ -12,6 +12,7 @@
   --blue-light: #e6f1fb;
   --navy: #0f1f3d;
   --text: #111;
+  --text-1: #111;
   --text-2: #444;
   --text-3: #888;
   --border: #ebebeb;
@@ -19,6 +20,7 @@
   --bg: #f7f8fa;
   --bg-2: #f0f2f5;
   --bg-3: #e8eaed;
+  --accent: #e94560;
   --sidebar-w: 240px;
   --radius: 10px;
   --radius-lg: 14px;
@@ -52,19 +54,53 @@ html, body { height: 100%; font-family: -apple-system, 'Inter', 'Segoe UI', sans
 /* Page header */
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-.page-header p { font-size: 13px; color: var(--text-3); margin-top: 2px; }
-.page-header-actions { display: flex; gap: 8px; align-items: center; }
+.page-header p, .page-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+.page-actions { display: flex; gap: 8px; align-items: center; }
 
-/* Buttons */
+/* Buttons — Mercury style */
 button { font-family: inherit; cursor: pointer; }
-.btn { border-radius: var(--radius); padding: 8px 16px; font-size: 14px; font-weight: 500; transition: background 0.1s; border: 1px solid transparent; }
-.btn-primary { background: var(--text); color: #fff; border-color: var(--text); }
-.btn-primary:hover { background: #333; }
-.btn-outline { background: #fff; color: var(--text-2); border-color: var(--border-2); }
-.btn-outline:hover { background: var(--bg-2); color: var(--text); }
+.btn { border-radius: var(--radius); padding: 8px 16px; font-size: 14px; font-weight: 500; transition: all 0.15s; border: 1.5px solid transparent; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.btn-primary {
+  background: var(--text-1);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1.1rem;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.btn-primary:hover { opacity: 0.82; }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-2);
+  border: 1.5px solid var(--border-2);
+  border-radius: 8px;
+  padding: 0.5rem 1.1rem;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.btn-outline:hover { border-color: var(--text-2); color: var(--text-1); }
+.btn-outline:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .btn-ghost { background: none; border: none; color: var(--text-3); padding: 6px 10px; font-size: 12px; }
 .btn-ghost:hover { color: var(--text-2); }
-.btn-danger { background: var(--red-light); color: var(--red); border: 1px solid transparent; }
+.btn-danger { background: var(--red-light); color: var(--red); border: 1px solid transparent; border-radius: 8px; padding: 0.5rem 1.1rem; font-size: 13px; font-weight: 500; }
 .btn-danger:hover { background: #fbe4e1; }
 .btn-green { background: var(--green-light); color: var(--green); border: 1px solid transparent; font-size: 12px; padding: 4px 10px; border-radius: 5px; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }

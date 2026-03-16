@@ -22,8 +22,7 @@ export default async function handler(req, res) {
     const { data, error } = await supabase
       .from('customers')
       .insert({ name, type, email, phone, contact_name, contact_title, payment_terms_days: payment_terms_days || 30, discount_pct: discount_pct || 0, default_price_list_id: default_price_list_id || null, notes })
-      .select()
-      .single()
+      .select().single()
     if (error) return res.status(500).json({ error: error.message })
     return res.status(201).json(data)
   }
@@ -35,11 +34,21 @@ export default async function handler(req, res) {
     const { data, error } = await supabase
       .from('customers')
       .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single()
+      .eq('id', id).select().single()
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json(data)
+  }
+
+  if (req.method === 'DELETE') {
+    const { id } = req.query
+    if (!id) return res.status(400).json({ error: 'id obligatoire' })
+    // Soft delete — on archive
+    const { error } = await supabase
+      .from('customers')
+      .update({ status: 'inactive', updated_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) return res.status(500).json({ error: error.message })
+    return res.status(200).json({ success: true })
   }
 
   res.status(405).json({ error: 'Method not allowed' })

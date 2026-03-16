@@ -1,6 +1,9 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY manquant — ajoutez-la dans Vercel > Settings > Environment Variables' })
+
   const { file_base64, file_type, customers } = req.body
   if (!file_base64 || !file_type) return res.status(400).json({ error: 'file_base64 et file_type obligatoires' })
 
@@ -12,17 +15,13 @@ export default async function handler(req, res) {
       content: [
         {
           type: file_type.includes('pdf') ? 'document' : 'image',
-          source: {
-            type: 'base64',
-            media_type: file_type,
-            data: file_base64,
-          },
+          source: { type: 'base64', media_type: file_type, data: file_base64 },
         },
         {
           type: 'text',
-          text: `You are an invoice parser for Clique Beauty Skincare (CBS), a beauty brand.
+          text: `You are an invoice parser for Clique Beauty Skincare (CBS).
 
-Extract all information from this invoice/order document and return ONLY a JSON object with this exact structure:
+Extract all information from this invoice/order document and return ONLY a JSON object:
 
 {
   "order_number": "string or null",
@@ -44,13 +43,12 @@ Extract all information from this invoice/order document and return ONLY a JSON 
   "subtotal": number,
   "total_amount": number,
   "confidence": "high or medium or low",
-  "warnings": ["array of strings describing anything unclear"]
+  "warnings": ["array of strings"]
 }
 
-Known customers in the system: ${customerNames}
+Known customers: ${customerNames}
 
-Try to match customer_name to one of the known customers. If you find a match, set customer_name to the exact name from the list.
-
+Try to match customer_name to one of the known customers exactly.
 Return ONLY valid JSON, no markdown, no explanation.`,
         },
       ],
@@ -59,12 +57,12 @@ Return ONLY valid JSON, no markdown, no explanation.`,
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      messages,
-    }),
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages }),
   })
 
   if (!response.ok) {
@@ -77,9 +75,8 @@ Return ONLY valid JSON, no markdown, no explanation.`,
 
   try {
     const clean = text.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
-    return res.status(200).json(parsed)
+    return res.status(200).json(JSON.parse(clean))
   } catch {
-    return res.status(422).json({ error: 'Could not parse Claude response', raw: text })
+    return res.status(422).json({ error: 'Could not parse response', raw: text })
   }
 }

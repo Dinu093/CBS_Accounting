@@ -20,9 +20,10 @@ const NAV = [
     { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },
   ]},
   { section: 'Billing', items: [
-    { href: '/invoices', label: 'Invoices', icon: 'report' },
-    { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
-  ]},
+  { href: '/invoices', label: 'Invoices', icon: 'report' },
+  { href: '/credit-notes', label: 'Credit Notes', icon: 'swap' },
+  { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },
+]},
  { section: 'Cash', items: [
   { href: '/bank-feed', label: 'Bank Feed', icon: 'card' },
   { href: '/shopify-payouts', label: 'Shopify Payouts', icon: 'trending' },

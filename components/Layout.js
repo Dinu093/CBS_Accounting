@@ -13,10 +13,10 @@ const NAV = [
     { href: '/products', label: 'Products', icon: 'box' },
     { href: '/orders', label: 'Orders', icon: 'trending' },
   ]},
-  { section: 'Inventory', items: [
-    { href: '/stock', label: 'Stock', icon: 'layers' },
-    { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },
-  ]},
+ { section: 'Inventory', items: [
+  { href: '/stock', label: 'Stock', icon: 'layers' },
+  { href: '/receipts', label: 'Receipts', icon: 'arrow-in' },
+]},
   { section: 'Billing', items: [
     { href: '/invoices', label: 'Invoices', icon: 'report' },
     { href: '/ar-aging', label: 'AR Aging', icon: 'swap' },

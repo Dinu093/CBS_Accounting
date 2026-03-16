@@ -13,7 +13,6 @@ const NAV = [
   { href: '/products', label: 'Products', icon: 'box' },
   { href: '/price-lists', label: 'Price Lists', icon: 'report' },
   { href: '/orders', label: 'Orders', icon: 'trending' },
-]},
   ]},
   { section: 'Inventory', items: [
     { href: '/stock', label: 'Stock', icon: 'layers' },

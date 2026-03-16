@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     const { type, status, search } = req.query
     let query = supabase
       .from('customers')
-      .select('*, locations:customer_locations(*)')
+      .select('*, locations:customer_locations(*), default_price_list:price_lists(id,name)')
       .order('name')
     if (type) query = query.eq('type', type)
     if (status) query = query.eq('status', status)
@@ -17,11 +17,11 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { name, type, email, phone, payment_terms_days, notes } = req.body
+    const { name, type, email, phone, contact_name, contact_title, payment_terms_days, discount_pct, default_price_list_id, notes } = req.body
     if (!name || !type) return res.status(400).json({ error: 'name et type sont obligatoires' })
     const { data, error } = await supabase
       .from('customers')
-      .insert({ name, type, email, phone, payment_terms_days: payment_terms_days || 30, notes })
+      .insert({ name, type, email, phone, contact_name, contact_title, payment_terms_days: payment_terms_days || 30, discount_pct: discount_pct || 0, default_price_list_id: default_price_list_id || null, notes })
       .select()
       .single()
     if (error) return res.status(500).json({ error: error.message })
@@ -31,6 +31,7 @@ export default async function handler(req, res) {
   if (req.method === 'PATCH') {
     const { id, ...updates } = req.body
     if (!id) return res.status(400).json({ error: 'id obligatoire' })
+    delete updates.created_at
     const { data, error } = await supabase
       .from('customers')
       .update({ ...updates, updated_at: new Date().toISOString() })

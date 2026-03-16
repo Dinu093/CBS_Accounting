@@ -1,132 +1,169 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
-import { usd, pct, fdate } from '../lib/constants'
-import { useAuth } from '../lib/auth'
 
-export async function getServerSideProps() { return { props: {} } }
+const STATUS_COLORS = {
+  active: 'badge-green',
+  discontinued: 'badge-red',
+  sample_only: 'badge-amber',
+}
 
-const EMPTY = { product_name: '', sku: '', msrp: '', unit_cost: '', quantity_on_hand: 0, reorder_level: '', lead_time_days: 30, notes: '' }
+const EMPTY_FORM = {
+  sku: '', name: '', family: '', description: '',
+  replenishment_lead_days: 30, reorder_point_units: 0
+}
 
 export default function Products() {
-  const { isAdmin } = useAuth()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState(EMPTY)
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
 
-  const load = () => { setLoading(true); fetch('/api/products').then(r => r.json()).then(d => { setProducts(Array.isArray(d) ? d : []); setLoading(false) }) }
-  useEffect(() => { load() }, [])
+  useEffect(() => { fetchProducts() }, [search])
 
-  const openNew = () => { setEditing(null); setForm(EMPTY); setShowModal(true) }
-  const openEdit = (p) => { setEditing(p.id); setForm({ product_name: p.product_name, sku: p.sku || '', msrp: p.msrp || '', unit_cost: p.unit_cost || '', quantity_on_hand: p.quantity_on_hand || 0, reorder_level: p.reorder_level || '', lead_time_days: p.lead_time_days || 30, notes: p.notes || '' }); setShowModal(true) }
+  async function fetchProducts() {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (search) params.append('search', search)
+    const res = await fetch(`/api/products?${params}`)
+    const data = await res.json()
+    setProducts(Array.isArray(data) ? data : [])
+    setLoading(false)
+  }
 
-  const save = async () => {
-    if (!form.product_name) return
+  async function handleSubmit(e) {
+    e.preventDefault()
     setSaving(true)
-    const body = { ...form, msrp: form.msrp ? +form.msrp : null, unit_cost: form.unit_cost ? +form.unit_cost : 0, reorder_level: form.reorder_level ? +form.reorder_level : 0, lead_time_days: +form.lead_time_days || 30 }
-    if (editing) { body.id = editing; await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
-    else { await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
-    setSaving(false); setShowModal(false); load()
+    setError(null)
+    const res = await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form)
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setSaving(false); return }
+    setShowForm(false)
+    setForm(EMPTY_FORM)
+    fetchProducts()
+    setSaving(false)
   }
 
-  const del = async (id) => {
-    if (!confirm('Delete this product?')) return
-    await fetch('/api/products?id=' + id, { method: 'DELETE' }); load()
+  // Calcule stock disponible toutes warehouses confondues
+  function getStock(product) {
+    if (!product.stock?.length) return { on_hand: 0, committed: 0, available: 0 }
+    return product.stock.reduce((acc, s) => ({
+      on_hand: acc.on_hand + s.qty_on_hand,
+      committed: acc.committed + s.qty_committed,
+      available: acc.available + (s.qty_on_hand - s.qty_committed),
+    }), { on_hand: 0, committed: 0, available: 0 })
   }
-
-  const margin = (p) => p.msrp && p.unit_cost ? ((+p.msrp - +p.unit_cost) / +p.msrp * 100) : null
-  const lowStock = products.filter(p => +p.quantity_on_hand <= +p.reorder_level && +p.reorder_level > 0)
 
   return (
     <Layout>
       <div className="page-header">
         <div>
           <h1>Products</h1>
-          <p>{products.length} products{lowStock.length > 0 ? ` · ${lowStock.length} low stock` : ''}</p>
+          <p className="page-sub">{products.length} product{products.length !== 1 ? 's' : ''}</p>
         </div>
-        {isAdmin && <button className="btn btn-primary" onClick={openNew}>+ New product</button>}
+        <div className="page-actions">
+          <button className="btn-primary" onClick={() => { setShowForm(true); setError(null) }}>
+            + New Product
+          </button>
+        </div>
       </div>
 
-      {lowStock.length > 0 && (
-        <div className="alert alert-warning">⚠ Low stock: {lowStock.map(p => p.product_name).join(', ')}</div>
-      )}
+      <div className="filter-bar">
+        <input
+          className="search-input"
+          placeholder="Search by SKU or name..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
 
-      {loading ? <div className="loading">Loading…</div> : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>SKU</th>
-                <th className="td-right">MSRP</th>
-                <th className="td-right">Unit cost (CMP)</th>
-                <th className="td-right">Margin</th>
-                <th className="td-right">In stock</th>
-                <th className="td-right">Reorder at</th>
-                <th>Lead time</th>
-                <th>Status</th>
-                {isAdmin && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {products.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 10 : 9} style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>No products yet</td></tr>
-              ) : products.map(p => {
-                const m = margin(p)
-                const isLow = +p.quantity_on_hand <= +p.reorder_level && +p.reorder_level > 0
-                const isNeg = +p.quantity_on_hand < 0
-                return (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 500 }}>{p.product_name}</td>
-                    <td className="td-muted">{p.sku || '—'}</td>
-                    <td className="td-right td-mono">{p.msrp ? usd(p.msrp) : '—'}</td>
-                    <td className="td-right td-mono">{usd(p.unit_cost)}</td>
-                    <td className="td-right" style={{ color: m ? (m > 50 ? 'var(--green)' : m > 30 ? 'var(--amber)' : 'var(--red)') : 'var(--text-3)' }}>{m !== null ? pct(m) : '—'}</td>
-                    <td className="td-right td-mono" style={{ fontWeight: 600, color: isNeg ? 'var(--red)' : isLow ? 'var(--amber)' : 'var(--green)' }}>{p.quantity_on_hand}</td>
-                    <td className="td-right td-muted">{p.reorder_level || '—'}</td>
-                    <td className="td-muted">{p.lead_time_days ? p.lead_time_days + 'd' : '—'}</td>
-                    <td>{isNeg ? <span className="badge badge-red">Negative</span> : isLow ? <span className="badge badge-amber">Low</span> : <span className="badge badge-green">OK</span>}</td>
-                    {isAdmin && <td><div style={{ display: 'flex', gap: 6 }}><button className="btn btn-outline btn-sm" onClick={() => openEdit(p)}>Edit</button><button className="btn btn-danger btn-sm" onClick={() => del(p.id)}>Delete</button></div></td>}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showModal && (
-        <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal">
-            <div className="modal-header">
-              <h2>{editing ? 'Edit product' : 'New product'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-row form-row-2">
-                <div className="form-group"><label className="form-label">Product name *</label><input type="text" value={form.product_name} onChange={e => setForm({...form, product_name: e.target.value})} placeholder="Radiance Face Cream" /></div>
-                <div className="form-group"><label className="form-label">SKU</label><input type="text" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} placeholder="RFC-2026" /></div>
+      {showForm && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-header"><h3>New Product</h3></div>
+          <div className="card-body">
+            {error && <div className="badge-red" style={{ marginBottom: '1rem', padding: '0.5rem 0.75rem', borderRadius: 6 }}>{error}</div>}
+            <form onSubmit={handleSubmit}>
+              <div className="grid-2">
+                <div>
+                  <label>SKU *</label>
+                  <input value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} required placeholder="CBS-001" />
+                </div>
+                <div>
+                  <label>Name *</label>
+                  <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+                </div>
+                <div>
+                  <label>Family</label>
+                  <input value={form.family} onChange={e => setForm({...form, family: e.target.value})} placeholder="serum, moisturizer..." />
+                </div>
+                <div>
+                  <label>Description</label>
+                  <input value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+                </div>
+                <div>
+                  <label>Lead Time (days)</label>
+                  <input type="number" value={form.replenishment_lead_days} onChange={e => setForm({...form, replenishment_lead_days: parseInt(e.target.value)})} />
+                </div>
+                <div>
+                  <label>Reorder Point (units)</label>
+                  <input type="number" value={form.reorder_point_units} onChange={e => setForm({...form, reorder_point_units: parseInt(e.target.value)})} />
+                </div>
               </div>
-              <div className="form-row form-row-2">
-                <div className="form-group"><label className="form-label">MSRP (retail price)</label><input type="number" value={form.msrp} onChange={e => setForm({...form, msrp: e.target.value})} placeholder="90.00" /></div>
-                <div className="form-group"><label className="form-label">Unit cost (CMP — auto-updated)</label><input type="number" value={form.unit_cost} onChange={e => setForm({...form, unit_cost: e.target.value})} placeholder="0.00" /></div>
+              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+                <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Product'}</button>
+                <button type="button" className="btn-outline" onClick={() => { setShowForm(false); setError(null) }}>Cancel</button>
               </div>
-              <div className="form-row form-row-3">
-                <div className="form-group"><label className="form-label">In stock</label><input type="number" value={form.quantity_on_hand} onChange={e => setForm({...form, quantity_on_hand: e.target.value})} /></div>
-                <div className="form-group"><label className="form-label">Reorder at (units)</label><input type="number" value={form.reorder_level} onChange={e => setForm({...form, reorder_level: e.target.value})} placeholder="90" /></div>
-                <div className="form-group"><label className="form-label">Lead time (days)</label><input type="number" value={form.lead_time_days} onChange={e => setForm({...form, lead_time_days: e.target.value})} placeholder="30" /></div>
-              </div>
-              <div className="form-group"><label className="form-label">Notes</label><textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2} placeholder="Any notes…" /></div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Create product'}</button>
-            </div>
+            </form>
           </div>
         </div>
       )}
+
+      <div className="card">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Name</th>
+              <th>Family</th>
+              <th>Avg Cost</th>
+              <th>On Hand</th>
+              <th>Committed</th>
+              <th>Available</th>
+              <th>Reorder Alert</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>Loading...</td></tr>
+            ) : products.length === 0 ? (
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-2)' }}>No products yet.</td></tr>
+            ) : products.map(p => {
+              const s = getStock(p)
+              const alert = p.reorder_point_units && s.available <= p.reorder_point_units
+              return (
+                <tr key={p.id}>
+                  <td><strong>{p.sku}</strong></td>
+                  <td>{p.name}</td>
+                  <td>{p.family || '—'}</td>
+                  <td>{p.unit_cost_avg ? `$${Number(p.unit_cost_avg).toFixed(2)}` : '—'}</td>
+                  <td>{s.on_hand}</td>
+                  <td>{s.committed}</td>
+                  <td><strong>{s.available}</strong></td>
+                  <td>{alert ? <span className="badge badge-red">⚠ Reorder</span> : <span className="badge badge-green">OK</span>}</td>
+                  <td><span className={`badge ${STATUS_COLORS[p.status] || 'badge-gray'}`}>{p.status}</span></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </Layout>
   )
 }

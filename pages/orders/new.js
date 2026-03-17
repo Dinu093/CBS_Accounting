@@ -8,7 +8,19 @@ const fmt = (n) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n ?? 0);
 
 const today = () => new Date().toISOString().split("T")[0];
-const emptyLine = () => ({ _key: Math.random().toString(36).slice(2), product_id: "", sku: "", product_name: "", quantity_ordered: 1, retail_price: 0, unit_price: 0, line_total: 0, qty_on_hand: null });
+
+// A line has: qty × unit_price = line_total (unit_price = retail price, editable)
+// Discount is applied globally at the bottom, not per-line
+const emptyLine = () => ({
+  _key: Math.random().toString(36).slice(2),
+  product_id: "",
+  sku: "",
+  product_name: "",
+  quantity_ordered: 1,
+  unit_price: 0,    // = retail price (auto-filled, editable)
+  line_total: 0,
+  qty_on_hand: null,
+});
 
 export default function NewOrderPage({ customers, products }) {
   const router = useRouter();
@@ -23,6 +35,7 @@ export default function NewOrderPage({ customers, products }) {
   const [submitting, setSubmitting]     = useState(false);
   const [error, setError]               = useState(null);
 
+  // Auto-fill customer info when selected
   useEffect(() => {
     if (!customerId) { setCustomer(null); return; }
     const c = customers.find(x => x.id === customerId);
@@ -31,34 +44,31 @@ export default function NewOrderPage({ customers, products }) {
     setPaymentTerms(c?.payment_terms_days ?? 30);
     const def = c?.locations?.find(l => l.is_shipping_default) ?? c?.locations?.[0];
     setLocationId(def?.id ?? "");
-    setLines(prev => prev.map(l => recalc(l, Number(c?.discount_pct ?? 0))));
   }, [customerId]);
 
-  const recalc = (line, pct) => {
-    const unitPrice = line.retail_price * (1 - pct / 100);
-    return { ...line, unit_price: unitPrice, line_total: unitPrice * line.quantity_ordered };
-  };
-
-  const handleDiscount = (val) => {
-    const pct = Math.min(100, Math.max(0, Number(val) || 0));
-    setDiscountPct(pct);
-    setLines(prev => prev.map(l => recalc(l, pct)));
-  };
-
+  // When product is selected → auto-fill retail price as unit_price
   const handleProduct = (key, productId) => {
     const p = products.find(x => x.id === productId);
     setLines(prev => prev.map(l => {
       if (l._key !== key) return l;
-      const base = { ...l, product_id: productId, sku: p?.sku ?? "", product_name: p?.name ?? "", retail_price: Number(p?.retail_price ?? 0), qty_on_hand: p?.qty_on_hand ?? null };
-      return recalc(base, discountPct);
+      const up = Number(p?.retail_price ?? 0);
+      return {
+        ...l,
+        product_id:   productId,
+        sku:          p?.sku ?? "",
+        product_name: p?.name ?? "",
+        unit_price:   up,
+        line_total:   up * l.quantity_ordered,
+        qty_on_hand:  p?.qty_on_hand ?? null,
+      };
     }));
   };
 
   const handleQty = (key, qty) => {
     setLines(prev => prev.map(l => {
       if (l._key !== key) return l;
-      const updated = { ...l, quantity_ordered: Math.max(1, parseInt(qty) || 1) };
-      return recalc(updated, discountPct);
+      const q = Math.max(1, parseInt(qty) || 1);
+      return { ...l, quantity_ordered: q, line_total: l.unit_price * q };
     }));
   };
 
@@ -70,9 +80,12 @@ export default function NewOrderPage({ customers, products }) {
     }));
   };
 
-  const subtotal = lines.reduce((s, l) => s + (l.line_total || 0), 0);
-  const retailSubtotal = lines.reduce((s, l) => s + l.retail_price * l.quantity_ordered, 0);
-  const discountAmount = retailSubtotal - subtotal;
+  // Totals — discount applied at the end
+  const subtotalBeforeDiscount = lines.reduce((s, l) => s + (l.line_total || 0), 0);
+  const discountAmount         = subtotalBeforeDiscount * (discountPct / 100);
+  const subtotal               = subtotalBeforeDiscount - discountAmount;
+  const totalAmount            = subtotal; // no tax for wholesale
+
   const validLines = lines.filter(l => l.product_id && l.quantity_ordered > 0);
   const canSubmit  = customerId && validLines.length > 0 && orderDate && !submitting;
 
@@ -83,26 +96,56 @@ export default function NewOrderPage({ customers, products }) {
       const res = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer_id: customerId, ship_to_location_id: locationId || null, order_date: orderDate, payment_terms_days: paymentTerms, discount_pct: discountPct, notes, subtotal, total_amount: subtotal, lines: validLines.map(l => ({ product_id: l.product_id, sku: l.sku, product_name: l.product_name, quantity_ordered: l.quantity_ordered, unit_price: l.unit_price, line_total: l.line_total })) }),
+        body: JSON.stringify({
+          customer_id:          customerId,
+          ship_to_location_id:  locationId || null,
+          order_date:           orderDate,
+          payment_terms_days:   paymentTerms,
+          discount_pct:         discountPct,
+          notes,
+          subtotal,
+          total_amount:         totalAmount,
+          lines: validLines.map(l => ({
+            product_id:       l.product_id,
+            sku:              l.sku,
+            product_name:     l.product_name,
+            quantity_ordered: l.quantity_ordered,
+            // unit_price stored = after-discount price for accounting
+            unit_price:       l.unit_price * (1 - discountPct / 100),
+            line_total:       l.line_total  * (1 - discountPct / 100),
+          })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unknown error");
       router.push(`/orders/${data.id}`);
-    } catch (e) { setError(e.message); setSubmitting(false); }
+    } catch (e) {
+      setError(e.message);
+      setSubmitting(false);
+    }
   };
 
   return (
     <Layout>
-      <div className="page-header">
+      {/* Back button styled like the app */}
+      <div style={{ marginBottom: 20 }}>
+        <Link href="/orders">
+          <button className="btn-outline btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            ← Orders
+          </button>
+        </Link>
+      </div>
+
+      <div className="page-header" style={{ marginBottom: 24 }}>
         <div>
-          <Link href="/orders"><span style={{ fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}>← Orders</span></Link>
-          <h1 style={{ marginTop: 4 }}>New Wholesale Order</h1>
+          <h1>New Wholesale Order</h1>
+          <p className="page-sub">Create a new order for a wholesale distributor</p>
         </div>
       </div>
 
       <div style={{ maxWidth: 820, display: "flex", flexDirection: "column", gap: 20 }}>
 
-        {/* Section 1 — Distributor */}
+        {/* ── Section 1 — Distributor ──────────────────────────────── */}
         <div className="card">
           <div className="card-header"><span className="card-title">1 — Distributor</span></div>
           <div className="card-body">
@@ -121,7 +164,9 @@ export default function NewOrderPage({ customers, products }) {
                     <select value={locationId} onChange={e => setLocationId(e.target.value)}>
                       <option value="">No specific location</option>
                       {customer.locations.map(loc => (
-                        <option key={loc.id} value={loc.id}>{loc.name}{loc.city ? ` — ${loc.city}, ${loc.state}` : ""}</option>
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}{loc.city ? ` — ${loc.city}, ${loc.state}` : ""}
+                        </option>
                       ))}
                     </select>
                   ) : (
@@ -133,16 +178,32 @@ export default function NewOrderPage({ customers, products }) {
 
             {customer && (
               <div style={{ display: "flex", gap: 24, marginTop: 12, padding: "12px 14px", background: "var(--bg)", borderRadius: "var(--radius)", border: "1px solid var(--border)", fontSize: 13 }}>
-                {customer.contact_name && <div><div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Contact</div><strong>{customer.contact_name}</strong></div>}
-                {customer.email && <div><div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Email</div><strong>{customer.email}</strong></div>}
-                <div><div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Discount</div><strong style={{ color: "var(--accent)" }}>{discountPct}%</strong></div>
-                <div><div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Payment Terms</div><strong>Net {paymentTerms}</strong></div>
+                {customer.contact_name && (
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Contact</div>
+                    <strong>{customer.contact_name}</strong>
+                  </div>
+                )}
+                {customer.email && (
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Email</div>
+                    <strong>{customer.email}</strong>
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Discount</div>
+                  <strong style={{ color: "var(--accent)" }}>{discountPct}%</strong>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Payment Terms</div>
+                  <strong>Net {paymentTerms}</strong>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Section 2 — Order Info */}
+        {/* ── Section 2 — Order Info ───────────────────────────────── */}
         <div className="card">
           <div className="card-header"><span className="card-title">2 — Order Info</span></div>
           <div className="card-body">
@@ -157,7 +218,10 @@ export default function NewOrderPage({ customers, products }) {
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label">Wholesale Discount %</label>
-                <input type="number" min="0" max="100" value={discountPct} onChange={e => handleDiscount(e.target.value)} />
+                <input
+                  type="number" min="0" max="100" value={discountPct}
+                  onChange={e => setDiscountPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                />
               </div>
             </div>
             <div className="form-group" style={{ margin: 0, marginTop: 12 }}>
@@ -167,17 +231,20 @@ export default function NewOrderPage({ customers, products }) {
           </div>
         </div>
 
-        {/* Section 3 — Products */}
+        {/* ── Section 3 — Products ─────────────────────────────────── */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">3 — Products</span>
-            <button className="btn-outline btn-sm" onClick={() => setLines(prev => [...prev, emptyLine()])}>+ Add line</button>
+            <button className="btn-outline btn-sm" onClick={() => setLines(prev => [...prev, emptyLine()])}>
+              + Add line
+            </button>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
-            {/* column headers */}
+
+            {/* Column headers */}
             <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 130px 110px 36px", gap: 8, padding: "8px 18px", borderBottom: "1px solid var(--border)", background: "var(--bg-2)" }}>
-              {["Product", "Qty", "Unit Price", "Line Total", ""].map((h, i) => (
-                <div key={i} style={{ fontSize: 11, fontWeight: 500, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: i >= 2 && i < 4 ? "right" : "left" }}>{h}</div>
+              {[["Product", "left"], ["Qty", "center"], ["Unit Price (retail)", "right"], ["Line Total", "right"], ["", "left"]].map(([h, align], i) => (
+                <div key={i} style={{ fontSize: 11, fontWeight: 500, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: align }}>{h}</div>
               ))}
             </div>
 
@@ -186,54 +253,74 @@ export default function NewOrderPage({ customers, products }) {
               return (
                 <div key={line._key} style={{ borderBottom: "1px solid var(--border)", background: stockWarn ? "var(--amber-light)" : "#fff" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 130px 110px 36px", gap: 8, padding: "10px 18px", alignItems: "center" }}>
+
+                    {/* Product select */}
                     <div>
-                      <select value={line.product_id} onChange={e => handleProduct(line._key, e.target.value)} style={{ marginBottom: 0 }}>
+                      <select value={line.product_id} onChange={e => handleProduct(line._key, e.target.value)}>
                         <option value="">Select product…</option>
-                        {products.map(p => <option key={p.id} value={p.id}>[{p.sku}] {p.name}</option>)}
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>[{p.sku}] {p.name}</option>
+                        ))}
                       </select>
                       {line.product_id && (
-                        <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>
+                        <div style={{ fontSize: 11, color: stockWarn ? "var(--amber)" : "var(--text-3)", marginTop: 3 }}>
                           Stock: {line.qty_on_hand ?? "—"} units
-                          {stockWarn && <span style={{ color: "var(--amber)", marginLeft: 6 }}>⚠ below qty (pre-order OK)</span>}
+                          {stockWarn && " ⚠ below qty — pre-order OK"}
                         </div>
                       )}
                     </div>
-                    <input type="number" min="1" value={line.quantity_ordered} onChange={e => handleQty(line._key, e.target.value)} style={{ textAlign: "center" }} />
-                    <input type="number" min="0" step="0.01" value={line.unit_price.toFixed(2)} onChange={e => handlePrice(line._key, e.target.value)} style={{ textAlign: "right" }} />
-                    <div style={{ textAlign: "right", fontWeight: 600, fontSize: 14 }}>{fmt(line.line_total)}</div>
+
+                    {/* Qty */}
+                    <input
+                      type="number" min="1" value={line.quantity_ordered}
+                      onChange={e => handleQty(line._key, e.target.value)}
+                      style={{ textAlign: "center" }}
+                    />
+
+                    {/* Unit price (retail, auto-filled, editable) */}
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={line.unit_price === 0 && !line.product_id ? "" : line.unit_price.toFixed(2)}
+                      placeholder="0.00"
+                      onChange={e => handlePrice(line._key, e.target.value)}
+                      style={{ textAlign: "right" }}
+                    />
+
+                    {/* Line total (at retail) */}
+                    <div style={{ textAlign: "right", fontWeight: 600, fontSize: 14 }}>
+                      {fmt(line.line_total)}
+                    </div>
+
+                    {/* Delete */}
                     <button
                       onClick={() => setLines(prev => prev.filter(l => l._key !== line._key))}
                       disabled={lines.length === 1}
                       style={{ background: "none", border: "none", color: "var(--red)", fontSize: 16, cursor: lines.length === 1 ? "not-allowed" : "pointer", opacity: lines.length === 1 ? 0.3 : 1, padding: 0 }}
                     >✕</button>
                   </div>
-                  {line.product_id && line.retail_price > 0 && (
-                    <div style={{ padding: "0 18px 10px", fontSize: 11, color: "var(--text-3)", display: "flex", gap: 8 }}>
-                      <span>Retail: {fmt(line.retail_price)}</span>
-                      <span>→ {discountPct}% off →</span>
-                      <span style={{ color: "var(--accent)" }}>Wholesale: {fmt(line.unit_price)}</span>
-                    </div>
-                  )}
                 </div>
               );
             })}
 
-            {/* Totals */}
+            {/* ── Totals ─────────────────────────────────────────── */}
             <div style={{ padding: "16px 18px", background: "var(--bg)", borderTop: "1px solid var(--border)" }}>
-              <div style={{ maxWidth: 280, marginLeft: "auto", display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-3)" }}>
-                  <span>Retail subtotal</span><span>{fmt(retailSubtotal)}</span>
+              <div style={{ maxWidth: 300, marginLeft: "auto", display: "flex", flexDirection: "column", gap: 7, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-2)" }}>
+                  <span>Subtotal (retail)</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(subtotalBeforeDiscount)}</span>
                 </div>
                 {discountPct > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", color: "var(--accent)" }}>
-                    <span>Discount ({discountPct}%)</span><span>− {fmt(discountAmount)}</span>
+                    <span>Wholesale discount ({discountPct}%)</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>− {fmt(discountAmount)}</span>
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-3)" }}>
                   <span>Tax</span><span>$0.00</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 2 }}>
-                  <span>Total</span><span>{fmt(subtotal)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, borderTop: "2px solid var(--border)", paddingTop: 8, marginTop: 2 }}>
+                  <span>Total</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(totalAmount)}</span>
                 </div>
               </div>
             </div>
@@ -245,23 +332,51 @@ export default function NewOrderPage({ customers, products }) {
 
         {/* Submit */}
         <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: 40 }}>
-          <Link href="/orders"><button className="btn-outline">Cancel</button></Link>
+          <Link href="/orders">
+            <button className="btn-outline">Cancel</button>
+          </Link>
           <button className="btn-primary" onClick={handleSubmit} disabled={!canSubmit}>
             {submitting ? "Creating order…" : "✓ Confirm Order"}
           </button>
         </div>
+
       </div>
     </Layout>
   );
 }
 
 export async function getServerSideProps() {
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
   const [{ data: rawCustomers }, { data: products }] = await Promise.all([
-    supabase.from("customers").select(`id, name, type, discount_pct, payment_terms_days, email, contact_name, customer_locations ( id, name, city, state, address_line1, is_shipping_default )`).eq("type", "wholesale").eq("status", "active").order("name"),
-    supabase.from("products").select(`id, sku, name, retail_price, family, stock_levels ( qty_on_hand, qty_committed )`).eq("is_active", true).order("name"),
+    supabase
+      .from("customers")
+      .select(`id, name, type, discount_pct, payment_terms_days, email, contact_name, customer_locations ( id, name, city, state, address_line1, is_shipping_default )`)
+      .eq("type", "wholesale")
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("products")
+      .select(`id, sku, name, retail_price, family, stock_levels ( qty_on_hand )`)
+      .eq("is_active", true)
+      .order("name"),
   ]);
-  const customers = (rawCustomers ?? []).map(c => ({ ...c, locations: c.customer_locations ?? [], customer_locations: undefined }));
-  const prods = (products ?? []).map(p => ({ ...p, qty_on_hand: p.stock_levels?.[0]?.qty_on_hand ?? 0, stock_levels: undefined }));
+
+  const customers = (rawCustomers ?? []).map(c => ({
+    ...c,
+    locations: c.customer_locations ?? [],
+    customer_locations: undefined,
+  }));
+
+  const prods = (products ?? []).map(p => ({
+    ...p,
+    qty_on_hand: p.stock_levels?.[0]?.qty_on_hand ?? 0,
+    retail_price: p.retail_price ? Number(p.retail_price) : 0,
+    stock_levels: undefined,
+  }));
+
   return { props: { customers, products: prods } };
 }
